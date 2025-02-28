@@ -80,6 +80,7 @@ class Package:
         self.path = Path(path)
         self.form = form
         self._config = self._load_config()
+        self._traits = {}  # Initialize traits dictionary
         
         # Handle package type from config
         config_type = self._config.get("type", "library")
@@ -142,17 +143,27 @@ class Package:
         return deps
     
     def get_local_dependencies(self) -> List["Package"]:
-        """Get all local dependencies from the deps directory."""
-        deps_dir = self.path / "deps"
-        if not deps_dir.exists():
-            return []
-            
+        """Get all local dependencies."""
         packages = []
-        # Look for config.yaml files in immediate subdirectories
-        for pkg_dir in deps_dir.iterdir():
-            if pkg_dir.is_dir() and (pkg_dir / "config.yaml").exists():
-                packages.append(Package(pkg_dir))
-                
+        
+        # Get dependencies from config
+        deps = self.get_dependencies()
+        for name, config in deps.items():
+            if isinstance(config, dict) and config.get("version") == "local":
+                # Handle local dependency with local-path
+                local_path = config.get("local-path")
+                if local_path:
+                    dep_path = (self.path / local_path).resolve()
+                    if dep_path.exists() and (dep_path / "config.yaml").exists():
+                        packages.append(Package(dep_path))
+                        
+        # Also check deps directory for other local dependencies
+        deps_dir = self.path / "deps"
+        if deps_dir.exists():
+            for pkg_dir in deps_dir.iterdir():
+                if pkg_dir.is_dir() and (pkg_dir / "config.yaml").exists():
+                    packages.append(Package(pkg_dir))
+                    
         return packages
         
     def get_all_dependency_includes(self) -> List[Path]:
@@ -219,6 +230,14 @@ class Package:
             for variant_config in variant.values():
                 if "cflags" in variant_config and "gcc" in variant_config["cflags"]:
                     cflags.extend(variant_config["cflags"]["gcc"].split())
+        
+        # Add include paths for own headers
+        for include_path in self._get_includes():
+            cflags.append(f"-I{include_path}")
+            
+        # Add include paths for all dependencies
+        for include_path in self.get_all_dependency_includes():
+            cflags.append(f"-I{include_path}")
                     
         return cflags
     
@@ -243,7 +262,9 @@ class Package:
     
     def _get_traits(self) -> Dict[str, str]:
         """Get package traits."""
-        return self._config.get("traits", {})
+        traits = self._config.get("traits", {}).copy()
+        traits.update(self._traits)  # Instance traits override config traits
+        return traits
 
     def get_build_dir(self) -> Path:
         """Get the build directory for this package."""

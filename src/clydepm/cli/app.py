@@ -230,6 +230,11 @@ def build(
         "--trait", "-t",
         help="Build traits in key=value format",
     ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose", "-v",
+        help="Show compiler commands",
+    ),
 ) -> None:
     """Build a package."""
     try:
@@ -239,6 +244,10 @@ def build(
             for trait in traits:
                 key, value = trait.split("=", 1)
                 trait_dict[key.strip()] = value.strip()
+                
+        # Add verbose trait if specified
+        if verbose:
+            trait_dict["verbose"] = "true"
         
         # Create package and builder
         package = Package(path)
