@@ -68,7 +68,6 @@ def build_package(path,
     packages = resolve_package_dependencies(top_package, server, new_traits, fetch_remote)
 
   packages = {package.name:package for package in packages}
-  print packages
 
   if not frozen: 
     with open(join(path, 'versions.txt'),'w') as f:
