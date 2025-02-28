@@ -141,6 +141,42 @@ class Package:
                     
         return deps
     
+    def get_local_dependencies(self) -> List["Package"]:
+        """Get all local dependencies from the deps directory."""
+        deps_dir = self.path / "deps"
+        if not deps_dir.exists():
+            return []
+            
+        packages = []
+        # Look for config.yaml files in immediate subdirectories
+        for pkg_dir in deps_dir.iterdir():
+            if pkg_dir.is_dir() and (pkg_dir / "config.yaml").exists():
+                packages.append(Package(pkg_dir))
+                
+        return packages
+        
+    def get_all_dependency_includes(self) -> List[Path]:
+        """Get include paths from all local dependencies."""
+        includes = []
+        for dep in self.get_local_dependencies():
+            includes.extend(dep._get_includes())
+            # Recursively get includes from nested dependencies
+            includes.extend(dep.get_all_dependency_includes())
+        return includes
+        
+    def get_all_dependency_libs(self) -> List[Path]:
+        """Get library paths from all local dependencies."""
+        libs = []
+        for dep in self.get_local_dependencies():
+            if dep.package_type == PackageType.LIBRARY:
+                # Add the library itself
+                lib_path = dep.get_output_path()
+                if lib_path.exists():
+                    libs.append(lib_path)
+            # Recursively get libraries from nested dependencies
+            libs.extend(dep.get_all_dependency_libs())
+        return libs
+    
     def get_source_files(self) -> List[Path]:
         """Get all source files for the package."""
         sources = []
@@ -196,7 +232,14 @@ class Package:
     
     def _get_libs(self) -> List[Path]:
         """Get library paths for the package."""
-        return [self.path / "lib"] if (self.path / "lib").exists() else []
+        libs = []
+        # Add own lib directory
+        lib_dir = self.path / "lib"
+        if lib_dir.exists():
+            libs.append(lib_dir)
+        # Add dependency libraries
+        libs.extend(self.get_all_dependency_libs())
+        return libs
     
     def _get_traits(self) -> Dict[str, str]:
         """Get package traits."""

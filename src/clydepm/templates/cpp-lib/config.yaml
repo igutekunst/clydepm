@@ -1,0 +1,6 @@
+name: {{ name }}
+version: {{ version }}
+type: library
+cflags:
+  gcc: -std=c++17
+requires: {} 

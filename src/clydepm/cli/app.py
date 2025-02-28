@@ -2,16 +2,19 @@
 Command-line interface for Clydepm.
 """
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict
 import os
 import sys
 import subprocess
+import shutil
+from enum import Enum
 
 import typer
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 from rich import print as rprint
+from jinja2 import Environment, FileSystemLoader, Template
 
 from ..core.package import Package, PackageType
 from ..build.builder import Builder, BuildError
@@ -27,9 +30,108 @@ app = typer.Typer(
 # Create console for rich output
 console = Console()
 
+class Language(str, Enum):
+    """Programming language for the package."""
+    C = "c"
+    CPP = "cpp"
+    CXX = "cxx"
+    CPLUSPLUS = "c++"
+    
+    @classmethod
+    def from_str(cls, s: str) -> "Language":
+        """Convert string to Language enum."""
+        s = s.lower()
+        if s in ("cpp", "cxx", "c++"):
+            return cls.CPP
+        elif s == "c":
+            return cls.C
+        else:
+            raise ValueError(f"Unknown language: {s}")
+            
+    def __str__(self) -> str:
+        """Convert Language enum to string."""
+        if self == Language.CPP:
+            return "C++"
+        return self.value.upper()
+
 def get_github_token() -> Optional[str]:
     """Get GitHub token from environment or config."""
     return os.getenv("GITHUB_TOKEN")
+
+def _get_template_dir() -> Path:
+    """Get the directory containing templates."""
+    return Path(__file__).parent.parent / "templates"
+
+def _list_templates() -> Dict[str, Path]:
+    """List available templates."""
+    template_dir = _get_template_dir()
+    return {
+        "c-app": template_dir / "c-app",  # C application template
+        "cpp-lib": template_dir / "cpp-lib",  # C++ library template
+        "c-lib": template_dir / "c-lib",  # C library template
+    }
+
+def _copy_template(src: Path, dst: Path, replacements: Dict[str, str]) -> None:
+    """
+    Copy template directory with variable replacement using Jinja2.
+    
+    Args:
+        src: Source template directory
+        dst: Destination directory
+        replacements: Dictionary of template variables and their values
+    """
+    # Add uppercase versions of all replacements
+    upper_replacements = {
+        f"{k}_upper": v.upper()
+        for k, v in replacements.items()
+    }
+    replacements.update(upper_replacements)
+    
+    # Create destination directory
+    dst.mkdir(parents=True, exist_ok=True)
+    
+    # Create Jinja environment
+    env = Environment(
+        loader=FileSystemLoader(str(src)),
+        keep_trailing_newline=True
+    )
+    
+    for item in src.rglob("*"):
+        # Skip __pycache__ and other hidden files
+        if any(p.startswith('.') for p in item.parts):
+            continue
+            
+        # Get relative path and replace template variables in path
+        rel_path = item.relative_to(src)
+        path_str = str(rel_path)
+        
+        # Replace {{var}} in path
+        try:
+            template = env.from_string(path_str)
+            path_str = template.render(**replacements)
+        except Exception as e:
+            raise ValueError(f"Error processing path template: {path_str}: {e}")
+            
+        rel_path = Path(path_str)
+        dst_path = dst / rel_path
+        
+        if item.is_dir():
+            dst_path.mkdir(parents=True, exist_ok=True)
+        else:
+            # Replace template variables in content
+            try:
+                with open(item) as f:
+                    template = env.from_string(f.read())
+                content = template.render(**replacements)
+            except Exception as e:
+                raise ValueError(f"Error processing file template {item}: {e}")
+            
+            # Ensure parent directory exists
+            dst_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Write content
+            with open(dst_path, "w") as f:
+                f.write(content)
 
 @app.command()
 def init(
@@ -51,37 +153,63 @@ def init(
         "--type", "-t",
         help="Package type",
     ),
+    language: Language = typer.Option(
+        None,
+        "--lang", "-l",
+        help="Programming language (c, cpp/cxx/c++)",
+    ),
+    template: str = typer.Option(
+        None,
+        "--template",
+        help="Template to use (c-app, cpp-lib, or c-lib)",
+    ),
+    version: str = typer.Option(
+        "0.1.0",
+        "--version", "-v",
+        help="Initial version",
+    ),
 ) -> None:
     """Initialize a new package."""
     try:
         path = Path(path)
-        path.mkdir(parents=True, exist_ok=True)
         
-        # Create standard directory structure
-        (path / "src").mkdir(exist_ok=True)
-        (path / "include").mkdir(exist_ok=True)
-        (path / "private_include").mkdir(exist_ok=True)
+        # Use directory name if no name provided
+        name = name or path.name
         
-        # Create initial config
-        config = {
-            "name": name or path.name,
-            "version": "0.1.0",
-            "type": package_type.value,
-            "cflags": {
-                "gcc": "-std=c++11"
-            }
-        }
-        
-        # Write initial config to create the file
-        with open(path / "config.yaml", "w") as f:
-            import yaml
-            yaml.dump(config, f, sort_keys=False, default_flow_style=False)
-        
-        # Create package and save config (this ensures proper type handling)
-        package = Package(path, package_type=package_type)
-        package.save_config()
+        # Determine language if not specified
+        if language is None:
+            language = Language.C if package_type == PackageType.APPLICATION else Language.CPP
             
-        rprint(f"[green]✓[/green] Initialized package in {path}")
+        # Determine template
+        templates = _list_templates()
+        if template is None:
+            if package_type == PackageType.APPLICATION:
+                template = "c-app"  # Always use C for applications
+            else:
+                template = "cpp-lib" if language == Language.CPP else "c-lib"
+            
+        if template not in templates:
+            available = ", ".join(templates.keys())
+            rprint(f"[red]Error:[/red] Unknown template: {template}")
+            rprint(f"Available templates: {available}")
+            sys.exit(1)
+            
+        # Copy template with replacements
+        replacements = {
+            "name": name,
+            "version": version,
+        }
+        _copy_template(templates[template], path, replacements)
+        
+        # Create package to validate
+        package = Package(path)
+        
+        rprint(f"[green]✓[/green] Created {str(language)} {package_type.value} package in {path}")
+        rprint("\nTo build and run:")
+        rprint(f"  cd {path}")
+        rprint("  clyde build")
+        if package_type == PackageType.APPLICATION:
+            rprint("  clyde run")
         
     except Exception as e:
         rprint(f"[red]Error:[/red] {str(e)}")

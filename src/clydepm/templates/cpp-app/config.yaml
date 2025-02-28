@@ -1,0 +1,6 @@
+name: {{ name }}
+version: {{ version }}
+type: application
+cflags:
+  gcc: -std=c11
+requires: {} 
