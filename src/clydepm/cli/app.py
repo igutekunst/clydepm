@@ -24,7 +24,7 @@ from ..github.registry import GitHubRegistry
 from ..github.config import load_config, save_config, validate_token, GitHubConfigError
 
 # Import commands
-from .commands import init
+from .commands import init, build, run, auth
 
 # Create Typer app
 app = typer.Typer(
@@ -38,80 +38,11 @@ console = Console()
 
 # Register commands
 app.command()(init)
+app.command()(build)
+app.command()(run)
+app.command()(auth)
 
 # Keep the original commands for now, we'll migrate them one by one
-@app.command()
-def build(
-    path: Path = typer.Argument(
-        ".",
-        help="Path to package",
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        resolve_path=True,
-    ),
-    traits: Optional[List[str]] = typer.Option(
-        None,
-        "--trait", "-t",
-        help="Build traits in key=value format",
-    ),
-    verbose: bool = typer.Option(
-        False,
-        "--verbose", "-v",
-        help="Show compiler commands",
-    ),
-) -> None:
-    """Build a package."""
-    try:
-        # Parse traits
-        trait_dict = {}
-        if traits:
-            for trait in traits:
-                key, value = trait.split("=", 1)
-                trait_dict[key.strip()] = value.strip()
-                
-        # Add verbose trait if specified
-        if verbose:
-            trait_dict["verbose"] = "true"
-        
-        # Create package and builder
-        package = Package(path)
-        builder = Builder()
-        
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            # Show build progress
-            task = progress.add_task(
-                f"Building {package.name} {package.version}...",
-                total=None
-            )
-            
-            result = builder.build(package, trait_dict)
-            
-            if result.success:
-                progress.update(task, completed=True)
-                rprint(f"[green]✓[/green] Built {package.name} {package.version}")
-                
-                # Show artifacts
-                if result.artifacts:
-                    table = Table("Type", "Path")
-                    for type_, path in result.artifacts.items():
-                        table.add_row(type_, str(path))
-                    console.print(table)
-            else:
-                progress.update(task, completed=True)
-                rprint(f"[red]Error:[/red] Build failed")
-                if result.error:
-                    console.print(result.error)
-                sys.exit(1)
-                
-    except Exception as e:
-        rprint(f"[red]Error:[/red] {str(e)}")
-        sys.exit(1)
-
 @app.command()
 def publish(
     path: Path = typer.Argument(
@@ -241,121 +172,6 @@ def install(
     except GitHubConfigError as e:
         rprint(f"[red]Error:[/red] {str(e)}")
         sys.exit(1)
-    except Exception as e:
-        rprint(f"[red]Error:[/red] {str(e)}")
-        sys.exit(1)
-
-@app.command()
-def run(
-    path: Path = typer.Argument(
-        ".",
-        help="Path to package",
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        resolve_path=True,
-    ),
-    args: Optional[List[str]] = typer.Argument(
-        None,
-        help="Arguments to pass to the application",
-    ),
-) -> None:
-    """Run an application package."""
-    try:
-        # Create package
-        package = Package(path)
-        
-        # Check package type
-        if package.package_type != PackageType.APPLICATION:
-            rprint(f"[red]Error:[/red] Package {package.name} is not an application")
-            sys.exit(1)
-            
-        # Get executable path
-        executable = package.get_output_path()
-        if not executable.exists():
-            # Try building first
-            builder = Builder()
-            result = builder.build(package)
-            if not result.success:
-                rprint(f"[red]Error:[/red] Failed to build {package.name}")
-                if result.error:
-                    console.print(result.error)
-                sys.exit(1)
-                
-        # Run the executable
-        cmd = [str(executable)]
-        if args:
-            cmd.extend(args)
-            
-        try:
-            result = subprocess.run(cmd, check=True)
-            sys.exit(result.returncode)
-        except subprocess.CalledProcessError as e:
-            sys.exit(e.returncode)
-            
-    except Exception as e:
-        rprint(f"[red]Error:[/red] {str(e)}")
-        sys.exit(1)
-
-@app.command()
-def auth(
-    token: Optional[str] = typer.Option(
-        None,
-        "--token",
-        help="GitHub Personal Access Token",
-    ),
-    organization: Optional[str] = typer.Option(
-        None,
-        "--org", "--organization",
-        help="GitHub organization to use for packages",
-    ),
-    validate: bool = typer.Option(
-        True,
-        "--validate/--no-validate",
-        help="Validate the token with GitHub API",
-    ),
-):
-    """Set up GitHub authentication for package management."""
-    try:
-        # Load existing config
-        config = load_config()
-        
-        # Update token if provided
-        if token:
-            config["token"] = token
-        elif "token" not in config:
-            # Prompt for token if not provided and not in config
-            token = typer.prompt("GitHub Personal Access Token", hide_input=True)
-            config["token"] = token
-            
-        # Validate token if requested
-        if validate and config.get("token"):
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                console=console,
-            ) as progress:
-                task = progress.add_task("Validating GitHub token...", total=None)
-                
-                if validate_token(config["token"]):
-                    progress.update(task, completed=True)
-                    rprint("[green]✓[/green] GitHub token is valid")
-                else:
-                    progress.update(task, completed=True)
-                    rprint("[red]Error:[/red] Invalid GitHub token")
-                    sys.exit(1)
-        
-        # Update organization if provided
-        if organization:
-            config["organization"] = organization
-            
-        # Save config
-        save_config(config)
-        
-        rprint("[green]✓[/green] GitHub authentication configured successfully!")
-        if "organization" in config:
-            rprint(f"Using organization: {config['organization']}")
-            
     except Exception as e:
         rprint(f"[red]Error:[/red] {str(e)}")
         sys.exit(1)

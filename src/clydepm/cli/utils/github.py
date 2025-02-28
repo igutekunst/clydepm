@@ -4,7 +4,7 @@ GitHub utility functions for Clydepm.
 import os
 from typing import Optional, Dict, Any
 
-from ..github.config import load_config, save_config, validate_token
+from ...github.config import load_config, save_config, validate_token
 
 
 def get_github_token() -> Optional[str]:
