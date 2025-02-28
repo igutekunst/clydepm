@@ -103,3 +103,14 @@ def get_authenticated_client() -> Tuple[Github, Optional[str]]:
         )
     
     return Github(token), config.get('organization') 
+
+def get_github_token() -> Optional[str]:
+    """Get GitHub token from environment or config."""
+    # First check environment
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        return token
+        
+    # Then check config
+    config = load_config()
+    return config.get("token")
