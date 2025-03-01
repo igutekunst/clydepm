@@ -1,17 +1,21 @@
-from github import Github
-from clydepm.github.config import load_config, GitHubConfigError
-from clydepm.github.config import get_github_token
-from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.table import Table
-from rich import print as rprint
+"""
+Search command for Clydepm.
+"""
 from typing import Optional
-import sys  
-import typer
-from rich.console import Console
+import sys
 
+import typer
+from rich import print as rprint
+from rich.console import Console
+from rich.table import Table
+from rich.progress import Progress, SpinnerColumn, TextColumn
 from github import Github
 from github.GithubException import GithubException
 
+from ..utils.github import get_github_token
+from ...github.config import load_config, GitHubConfigError
+
+# Create console for rich output
 console = Console()
 
 
@@ -30,7 +34,7 @@ def search(
         "--limit", "-n",
         help="Maximum number of results to show",
     ),
-):
+) -> None:
     """Search for packages on GitHub."""
     try:
         # Get GitHub token from config or environment
