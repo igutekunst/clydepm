@@ -1,1 +1,0 @@
-arm-rtems4.11-g++ -B/home/igutek/rtems/lib-rtems-4.11/arm-rtems4.11/stm32f7x/lib/ -specs bsp_specs -qrtems -Wall -O0 -g -march=armv7-m -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -march=armv7-m -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -o print-link.exe o-optimize/init.o -lm

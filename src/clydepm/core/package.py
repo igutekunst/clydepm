@@ -35,11 +35,12 @@ def package_type_representer(dumper: yaml.Dumper, data: PackageType) -> yaml.Sca
 yaml.add_representer(PackageType, package_type_representer)
 
 
-class CompilerInfo(BaseModel):
-    """Information about the compiler used to build the package."""
-    name: str = Field(..., description="Compiler name (e.g. gcc, clang)")
-    version: str = Field(..., description="Compiler version")
-    target: str = Field(..., description="Target architecture")
+@dataclass
+class CompilerInfo:
+    """Information about the compiler."""
+    name: str
+    version: str
+    target: str
 
 
 @dataclass
@@ -141,6 +142,10 @@ class Package:
                     deps.update(variant_config["requires"])
                     
         return deps
+
+    def get_runtime_dependencies(self) -> List["Package"]:
+        """Get all runtime dependencies."""
+        return self.get_local_dependencies()    
     
     def get_local_dependencies(self) -> List["Package"]:
         """Get all local dependencies."""
