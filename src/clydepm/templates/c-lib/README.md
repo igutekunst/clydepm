@@ -45,5 +45,34 @@ To use this library in another Clyde project, add it to the dependencies in `con
 
 ```yaml
 requires:
-  {{ name }}: "{{ version }}"
-``` 
+  # Local dependency (relative path)
+  {{ name }}: "local:../{{ name }}"
+  
+  # Remote dependency (version constraints)
+  {{ name }}: "^{{ version }}"        # Compatible with {{ version }}
+  {{ name }}: "=={{ version }}"       # Exact version
+  {{ name }}: ">=1.0.0"              # Version 1.0.0 or higher
+  {{ name }}: "git:main"             # Specific Git branch/tag/commit
+```
+
+## Include Path Structure
+
+Headers are organized to prevent naming conflicts:
+
+```
+{{ name }}/
+├── include/              # Public headers (exposed to dependents)
+│   └── {{ name }}/      # Package namespace directory
+│       └── {{ name }}.h
+└── private_include/     # Private headers (not exposed)
+```
+
+Public headers are included using the package name as namespace:
+```c
+#include <{{ name }}/{{ name }}.h>
+```
+
+This structure ensures:
+- No header name conflicts between packages
+- Clear separation of public/private interfaces
+- No need to copy headers between packages 

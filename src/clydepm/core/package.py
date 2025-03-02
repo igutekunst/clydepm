@@ -4,7 +4,7 @@ Core package management functionality for Clydepm.
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 import hashlib
 import json
 import yaml
@@ -155,45 +155,79 @@ class Package:
         
         # Get dependencies from config
         deps = self.get_dependencies()
-        for name, config in deps.items():
-            if isinstance(config, dict) and config.get("version") == "local":
-                # Handle local dependency with local-path
-                local_path = config.get("local-path")
-                if local_path:
+        for name, spec in deps.items():
+            if isinstance(spec, str):
+                if spec.startswith("local:"):
+                    # Handle local dependency with path
+                    local_path = spec[6:]  # Remove "local:" prefix
                     dep_path = (self.path / local_path).resolve()
                     if dep_path.exists() and (dep_path / "config.yaml").exists():
                         packages.append(Package(dep_path))
-                        
-        # Also check deps directory for other local dependencies
-        deps_dir = self.path / "deps"
-        if deps_dir.exists():
-            for pkg_dir in deps_dir.iterdir():
-                if pkg_dir.is_dir() and (pkg_dir / "config.yaml").exists():
-                    packages.append(Package(pkg_dir))
+                    else:
+                        raise ValueError(f"Local dependency {name} not found at {dep_path}")
                     
         return packages
         
+    def get_remote_dependencies(self) -> List["Package"]:
+        """Get all remote dependencies."""
+        packages = []
+        
+        # Get dependencies from config
+        deps = self.get_dependencies()
+        for name, spec in deps.items():
+            if isinstance(spec, str):
+                if not spec.startswith("local:"):
+                    # This is a remote dependency, should be in deps/
+                    dep_path = self.path / "deps" / name
+                    if dep_path.exists() and (dep_path / "config.yaml").exists():
+                        packages.append(Package(dep_path))
+                    
+        return packages
+
+    def get_all_dependencies(self) -> List["Package"]:
+        """Get all dependencies (both local and remote)."""
+        deps = []
+        deps.extend(self.get_local_dependencies())
+        deps.extend(self.get_remote_dependencies())
+        return deps
+        
     def get_all_dependency_includes(self) -> List[Path]:
-        """Get include paths from all local dependencies."""
+        """Get include paths from all dependencies."""
         includes = []
-        for dep in self.get_local_dependencies():
-            includes.extend(dep._get_includes())
+        for dep in self.get_all_dependencies():
+            # Only add the public include directory
+            dep_include = dep.path / "include"
+            if dep_include.exists():
+                includes.append(dep_include)
+                # Also add the package-specific include directory
+                pkg_include = dep_include / dep.name
+                if pkg_include.exists():
+                    includes.append(pkg_include)
             # Recursively get includes from nested dependencies
             includes.extend(dep.get_all_dependency_includes())
         return includes
         
-    def get_all_dependency_libs(self) -> List[Path]:
-        """Get library paths from all local dependencies."""
+    def get_all_dependency_libs(self) -> Tuple[List[Path], List[str]]:
+        """Get library paths and flags from all dependencies.
+        
+        Returns:
+            Tuple of (library paths, linker flags)
+        """
         libs = []
-        for dep in self.get_local_dependencies():
+        ldflags = []
+        for dep in self.get_all_dependencies():
             if dep.package_type == PackageType.LIBRARY:
-                # Add the library itself
-                lib_path = dep.get_output_path()
+                # Add the library from its build directory
+                lib_path = dep.get_build_dir()
                 if lib_path.exists():
                     libs.append(lib_path)
+                    # Add -l flag for this library
+                    ldflags.append(f"-l{dep.name}")
             # Recursively get libraries from nested dependencies
-            libs.extend(dep.get_all_dependency_libs())
-        return libs
+            dep_libs, dep_flags = dep.get_all_dependency_libs()
+            libs.extend(dep_libs)
+            ldflags.extend(dep_flags)
+        return libs, ldflags
     
     def get_source_files(self) -> List[Path]:
         """Get all source files for the package."""
@@ -216,11 +250,15 @@ class Package:
     
     def create_build_metadata(self, compiler_info: CompilerInfo) -> BuildMetadata:
         """Create build metadata for binary packages."""
+        # Get all include paths
+        includes = self._get_includes()
+        includes.extend(self.get_all_dependency_includes())
+        
         return BuildMetadata(
             compiler=compiler_info,
             cflags=self._get_cflags(),
             ldflags=self._get_ldflags(),  # Add ldflags
-            includes=self._get_includes(),
+            includes=includes,
             libs=self._get_libs(),
             traits=self._get_traits()
         )
@@ -244,14 +282,6 @@ class Package:
                         cflags.extend(variant_config["cflags"]["gcc"].split())
                     if "g++" in variant_config["cflags"]:
                         cflags.extend(variant_config["cflags"]["g++"].split())
-        
-        # Add include paths for own headers
-        for include_path in self._get_includes():
-            cflags.append(f"-I{include_path}")
-            
-        # Add include paths for all dependencies
-        for include_path in self.get_all_dependency_includes():
-            cflags.append(f"-I{include_path}")
                     
         return cflags
 
@@ -274,16 +304,29 @@ class Package:
                         ldflags.extend(variant_config["ldflags"]["gcc"].split())
                     if "g++" in variant_config["ldflags"]:
                         ldflags.extend(variant_config["ldflags"]["g++"].split())
-                    
+        
+        # Add dependency ldflags
+        _, dep_flags = self.get_all_dependency_libs()
+        ldflags.extend(dep_flags)
+                
         return ldflags
     
     def _get_includes(self) -> List[Path]:
         """Get include paths for the package."""
-        includes = [
-            self.path / "include",
-            self.path / "private_include"
-        ]
-        return [p for p in includes if p.exists()]
+        includes = []
+        # Add public include directory
+        include_dir = self.path / "include"
+        if include_dir.exists():
+            includes.append(include_dir)
+            # Also add package-specific include directory
+            pkg_include = include_dir / self.name
+            if pkg_include.exists():
+                includes.append(pkg_include)
+        # Add private include directory (only for this package)
+        private_include_dir = self.path / "private_include"
+        if private_include_dir.exists():
+            includes.append(private_include_dir)
+        return includes
     
     def _get_libs(self) -> List[Path]:
         """Get library paths for the package."""
@@ -292,8 +335,9 @@ class Package:
         lib_dir = self.path / "lib"
         if lib_dir.exists():
             libs.append(lib_dir)
-        # Add dependency libraries
-        libs.extend(self.get_all_dependency_libs())
+        # Add dependency library paths
+        dep_libs, _ = self.get_all_dependency_libs()
+        libs.extend(dep_libs)
         return libs
     
     def _get_traits(self) -> Dict[str, str]:
@@ -309,6 +353,6 @@ class Package:
     def get_output_path(self) -> Path:
         """Get the output path for this package's artifacts."""
         if self.package_type == PackageType.LIBRARY:
-            return self.path / "lib" / f"lib{self.name}.a"
+            return self.get_build_dir() / f"lib{self.name}.a"
         else:
-            return self.path / "bin" / self.name 
+            return self.get_build_dir() / self.name 

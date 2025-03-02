@@ -78,6 +78,69 @@ cflags:
 requires: {}       # Dependencies
 ```
 
+## Dependencies
+
+Clyde supports both local and remote package dependencies. Dependencies are specified in the `requires` section of `config.yaml`:
+
+```yaml
+requires:
+  my-lib: "local:../my-lib"        # Local package
+  remote-lib: "^1.2.0"             # Remote package with semver
+  specific-lib: "=1.0.0"           # Exact version
+  git-lib: "git:main"              # Specific git branch/tag/commit
+```
+
+### Local Dependencies
+
+Local dependencies are built in their original location and linked directly. The path can be relative to the current package or absolute. For example:
+
+```yaml
+requires:
+  my-lib: "local:../my-lib"        # Relative path
+  other-lib: "local:/path/to/lib"  # Absolute path
+```
+
+Future versions will support version constraints for local packages using Git tags.
+
+### Remote Dependencies
+
+Remote packages are downloaded to the `deps/` directory and built there. They support:
+- Semantic versioning (e.g., "^1.2.0", "~1.2.0", "=1.0.0")
+- Git references (branches, tags, or commit hashes)
+- GitHub packages (automatically resolved)
+
+### Include Paths
+
+Each package must organize its headers as follows:
+```
+my-package/
+├── include/              # Public headers (exposed to dependents)
+│   └── my-package/      # Package namespace directory
+│       ├── api.h
+│       └── types.h
+├── private_include/     # Private headers (not exposed)
+└── src/                # Implementation files
+```
+
+Public headers are included using the package name as namespace:
+```c
+#include <my-package/api.h>
+```
+
+This structure ensures:
+- No header name conflicts between packages
+- Clear separation of public/private interfaces
+- No need to copy headers between packages
+
+### Linking
+
+Libraries are automatically linked based on dependencies:
+- Library names are derived from package names (e.g., `my-lib` becomes `-lmy-lib`)
+- Dependencies are built in correct order
+- Link paths are automatically configured
+
+Note: Support for circular dependencies and diamond dependency resolution is planned for future versions.
+
 ## Commands
 
 ### Initialize a Project
