@@ -10,6 +10,9 @@ from .commands.init import init
 from .commands.build import build
 from .commands.run import run
 from .commands.auth import auth
+from .commands.publish import publish
+from .commands.install import install
+from .commands.cache import cache
 
 # Set up logging
 logger = logging.getLogger("clydepm")
@@ -34,6 +37,10 @@ app.command()(init)
 app.command()(build)
 app.command()(run)
 app.command()(auth)
+app.command()(publish)
+app.command()(install)
+app.command()(cache)
+
 
 def main():
     """Main entry point for CLI."""

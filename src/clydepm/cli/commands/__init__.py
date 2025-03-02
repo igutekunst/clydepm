@@ -8,6 +8,8 @@ from .auth import auth
 from .search import search
 from .publish import publish
 from .install import install
+from .cache import cache
+
 __all__ = [
     "init",
     "build",
@@ -16,4 +18,5 @@ __all__ = [
     "search",
     "publish",
     "install",
+    "cache",
 ]
