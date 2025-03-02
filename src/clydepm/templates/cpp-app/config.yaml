@@ -2,5 +2,7 @@ name: {{ name }}
 version: {{ version }}
 type: application
 cflags:
-  gcc: -std=c11
+  g++: -std=c++17 -Wall -Wextra
+ldflags:
+  g++: -lstdc++
 requires: {} 

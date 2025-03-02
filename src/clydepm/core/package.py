@@ -48,6 +48,7 @@ class BuildMetadata:
     """Metadata for binary package linking."""
     compiler: CompilerInfo
     cflags: List[str] = field(default_factory=list)
+    ldflags: List[str] = field(default_factory=list)  # Add ldflags for linking
     includes: List[Path] = field(default_factory=list)
     libs: List[Path] = field(default_factory=list)
     traits: Dict[str, str] = field(default_factory=dict)
@@ -61,6 +62,7 @@ class BuildMetadata:
                 "target": self.compiler.target,
             },
             "cflags": sorted(self.cflags),
+            "ldflags": sorted(self.ldflags),  # Include ldflags in hash
             "traits": self.traits
         }
         return hashlib.sha256(
@@ -217,6 +219,7 @@ class Package:
         return BuildMetadata(
             compiler=compiler_info,
             cflags=self._get_cflags(),
+            ldflags=self._get_ldflags(),  # Add ldflags
             includes=self._get_includes(),
             libs=self._get_libs(),
             traits=self._get_traits()
@@ -227,14 +230,20 @@ class Package:
         cflags = []
         
         # Get global cflags
-        if "cflags" in self._config and "gcc" in self._config["cflags"]:
-            cflags.extend(self._config["cflags"]["gcc"].split())
+        if "cflags" in self._config:
+            if "gcc" in self._config["cflags"]:
+                cflags.extend(self._config["cflags"]["gcc"].split())
+            if "g++" in self._config["cflags"]:
+                cflags.extend(self._config["cflags"]["g++"].split())
             
         # Get variant-specific cflags
         for variant in self._config.get("variants", []):
             for variant_config in variant.values():
-                if "cflags" in variant_config and "gcc" in variant_config["cflags"]:
-                    cflags.extend(variant_config["cflags"]["gcc"].split())
+                if "cflags" in variant_config:
+                    if "gcc" in variant_config["cflags"]:
+                        cflags.extend(variant_config["cflags"]["gcc"].split())
+                    if "g++" in variant_config["cflags"]:
+                        cflags.extend(variant_config["cflags"]["g++"].split())
         
         # Add include paths for own headers
         for include_path in self._get_includes():
@@ -245,6 +254,28 @@ class Package:
             cflags.append(f"-I{include_path}")
                     
         return cflags
+
+    def _get_ldflags(self) -> List[str]:
+        """Get linker flags for the package."""
+        ldflags = []
+        
+        # Get global ldflags
+        if "ldflags" in self._config:
+            if "gcc" in self._config["ldflags"]:
+                ldflags.extend(self._config["ldflags"]["gcc"].split())
+            if "g++" in self._config["ldflags"]:
+                ldflags.extend(self._config["ldflags"]["g++"].split())
+            
+        # Get variant-specific ldflags
+        for variant in self._config.get("variants", []):
+            for variant_config in variant.values():
+                if "ldflags" in variant_config:
+                    if "gcc" in variant_config["ldflags"]:
+                        ldflags.extend(variant_config["ldflags"]["gcc"].split())
+                    if "g++" in variant_config["ldflags"]:
+                        ldflags.extend(variant_config["ldflags"]["g++"].split())
+                    
+        return ldflags
     
     def _get_includes(self) -> List[Path]:
         """Get include paths for the package."""

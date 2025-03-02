@@ -13,9 +13,12 @@ from rich.console import Console
 from ...core.package import Package, PackageType
 from ..models.language import Language
 from ..utils.templates import list_templates, copy_template
+import logging
 
 # Create console for rich output
 console = Console()
+
+logger = logging.getLogger(__name__)
 
 
 def init(
@@ -45,7 +48,7 @@ def init(
     template: str = typer.Option(
         None,
         "--template",
-        help="Template to use (c-app, cpp-lib, or c-lib)",
+        help="Template to use (c-app, cpp-app, c-lib, or cpp-lib)",
     ),
     version: str = typer.Option(
         "0.1.0",
@@ -87,16 +90,20 @@ def init(
         
         # Determine language if not specified
         if language is None:
+            # Default to C++ for libraries, C for applications
             language = Language.C if package_type == PackageType.APPLICATION else Language.CPP
-            
+            logger.debug(f"Using default language {language} for {package_type}")
+        
         # Determine template
         templates = list_templates()
         if template is None:
+            # Use language-specific template for both applications and libraries
             if package_type == PackageType.APPLICATION:
-                template = "c-app"  # Always use C for applications
+                template = "cpp-app" if language in [Language.CPP, Language.CXX, Language.CPLUSPLUS] else "c-app"
             else:
-                template = "cpp-lib" if language == Language.CPP else "c-lib"
-            
+                template = "cpp-lib" if language in [Language.CPP, Language.CXX, Language.CPLUSPLUS] else "c-lib"
+            logger.debug(f"Using template {template} for {package_type} with language {language}")
+
         if template not in templates:
             available = ", ".join(templates.keys())
             rprint(f"[red]Error:[/red] Unknown template: {template}")
@@ -107,6 +114,7 @@ def init(
         replacements = {
             "name": name,
             "version": version,
+            "name_upper": name.upper(),  # Add this for header guards
         }
         copy_template(templates[template], path, replacements)
         

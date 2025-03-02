@@ -1,38 +1,43 @@
 """
-Command-line interface for Clydepm.
+Main CLI application for Clydepm.
 """
-import typer
+import os
 import logging
-from rich.console import Console
 
-# Import commands
-from .commands import init, build, run, auth, search, publish, install
+import typer
 
-# Create Typer app
-app = typer.Typer(
-    name="clyde",
-    help="Clyde C/C++ Package Manager",
-    add_completion=False,  # We'll add this later
-)
+from .commands.init import init
+from .commands.build import build
+from .commands.run import run
+from .commands.auth import auth
 
-# Create console for rich output
-console = Console()
+# Set up logging
+logger = logging.getLogger("clydepm")
+logger.setLevel(logging.DEBUG if os.getenv("CLYDE_DEBUG") else logging.INFO)
 
-# Register commands
+# Create console handler
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG if os.getenv("CLYDE_DEBUG") else logging.INFO)
+
+# Create formatter
+formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+
+# Add handler to logger
+logger.addHandler(ch)
+
+# Create typer app
+app = typer.Typer()
+
+# Add commands
 app.command()(init)
 app.command()(build)
 app.command()(run)
 app.command()(auth)
-app.command()(search)
-app.command()(publish)
-app.command()(install)
 
-def main(
-    verbose: bool = typer.Option(
-        False,
-        "--verbose", "-v",
-        help="Enable debug logging",
-    ),
-):
-    """Entry point for the CLI."""
+def main():
+    """Main entry point for CLI."""
     app()
+
+if __name__ == "__main__":
+    main()

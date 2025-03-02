@@ -4,6 +4,7 @@ Template utility functions for Clydepm.
 from pathlib import Path
 from typing import Dict
 import os
+import logging
 
 from jinja2 import Environment, FileSystemLoader
 
@@ -18,6 +19,7 @@ def list_templates() -> Dict[str, Path]:
     template_dir = get_template_dir()
     return {
         "c-app": template_dir / "c-app",  # C application template
+        "cpp-app": template_dir / "cpp-app",  # C++ application template
         "cpp-lib": template_dir / "cpp-lib",  # C++ library template
         "c-lib": template_dir / "c-lib",  # C library template
     }
@@ -32,12 +34,17 @@ def copy_template(src: Path, dst: Path, replacements: Dict[str, str]) -> None:
         dst: Destination directory
         replacements: Dictionary of template variables and their values
     """
+    logger = logging.getLogger(__name__)
+    logger.debug(f"Copying template from {src} to {dst}")
+    logger.debug(f"Replacements: {replacements}")
+    
     # Add uppercase versions of all replacements
     upper_replacements = {
         f"{k}_upper": v.upper()
         for k, v in replacements.items()
     }
     replacements.update(upper_replacements)
+    logger.debug(f"Final replacements: {replacements}")
     
     # Create destination directory
     dst.mkdir(parents=True, exist_ok=True)
@@ -56,25 +63,33 @@ def copy_template(src: Path, dst: Path, replacements: Dict[str, str]) -> None:
         # Get relative path and replace template variables in path
         rel_path = item.relative_to(src)
         path_str = str(rel_path)
+        logger.debug(f"Processing path: {path_str}")
         
-        # Replace {{var}} in path
-        try:
-            template = env.from_string(path_str)
-            path_str = template.render(**replacements)
-        except Exception as e:
-            raise ValueError(f"Error processing path template: {path_str}: {e}")
-            
-        rel_path = Path(path_str)
+        # Replace {{var}} in each path component
+        path_parts = []
+        for part in path_str.split('/'):
+            try:
+                template = env.from_string(part)
+                rendered_part = template.render(**replacements)
+                path_parts.append(rendered_part)
+                logger.debug(f"Rendered path part: {part} -> {rendered_part}")
+            except Exception as e:
+                raise ValueError(f"Error processing path component template: {part}: {e}")
+                
+        rel_path = Path('/'.join(path_parts))
         dst_path = dst / rel_path
+        logger.debug(f"Final path: {dst_path}")
         
         if item.is_dir():
             dst_path.mkdir(parents=True, exist_ok=True)
+            logger.debug(f"Created directory: {dst_path}")
         else:
             # Replace template variables in content
             try:
                 with open(item) as f:
                     template = env.from_string(f.read())
                 content = template.render(**replacements)
+                logger.debug(f"Rendered content for {item}")
             except Exception as e:
                 raise ValueError(f"Error processing file template {item}: {e}")
             
@@ -83,4 +98,5 @@ def copy_template(src: Path, dst: Path, replacements: Dict[str, str]) -> None:
             
             # Write content
             with open(dst_path, "w") as f:
-                f.write(content) 
+                f.write(content)
+            logger.debug(f"Wrote file: {dst_path}") 
