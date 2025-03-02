@@ -1,9 +1,19 @@
 """
-CLI entry points for Clydepm.
+Command line interface for Clydepm.
 """
-from .app import main, app
+import typer
+import logging
 
-# For backward compatibility
-def main_v2():
-    """Entry point for clyde2 command."""
-    main() 
+from .commands import init, build, run, cache
+
+app = typer.Typer()
+
+# Register commands
+app.command()(init)
+app.command()(build)
+app.command()(run)
+app.add_typer(cache)
+
+def main():
+    """Entry point for the CLI."""
+    app() 
