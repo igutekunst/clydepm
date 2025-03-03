@@ -1,0 +1,107 @@
+# Cursor Rules for Clyde Package Manager
+
+# Documentation References
+docs_path: docs/docs/
+architecture_docs:
+  - architecture/overview.md
+  - architecture/code-organization.md
+  - architecture/package-management.md
+  - architecture/build-system.md
+  - architecture/cli-design.md
+
+# Code Organization Rules
+module_rules:
+  core:
+    path: src/clydepm/core
+    description: "Core package management functionality"
+    responsibilities:
+      - Package definition and metadata
+      - Dependency management
+      - Version handling
+      - Configuration management
+    
+  build:
+    path: src/clydepm/build
+    description: "Build system implementation"
+    responsibilities:
+      - Build orchestration
+      - Dependency resolution
+      - Build artifact caching
+      - Compiler integration
+    
+  cli:
+    path: src/clydepm/cli
+    description: "Command-line interface"
+    responsibilities:
+      - Command routing
+      - User interaction
+      - Error handling
+      
+  github:
+    path: src/clydepm/github
+    description: "GitHub integration"
+    responsibilities:
+      - Repository integration
+      - Package publishing
+      
+  templates:
+    path: src/clydepm/templates
+    description: "Project templates"
+    responsibilities:
+      - Template management
+      - Scaffolding
+
+# Dependency Rules
+allowed_dependencies:
+  cli:
+    - core
+    - build
+  build:
+    - core
+  github:
+    - core
+
+# Naming Conventions
+naming:
+  files: snake_case
+  classes: PascalCase
+  functions: snake_case
+  constants: SCREAMING_SNAKE_CASE
+
+# Code Style
+style:
+  line_length: 88  # Black default
+  quotes: double
+  docstrings: google
+
+# Testing
+testing:
+  pattern: test_*.py
+  directory: tests/
+  structure: mirror_source
+
+# Future Modules
+future_modules:
+  registry:
+    path: src/clydepm/registry
+    description: "Registry integration"
+    
+  inspect:
+    path: src/clydepm/inspect
+    description: "Build inspection tools"
+    
+  plugins:
+    path: src/clydepm/plugins
+    description: "Plugin system"
+
+# Instructions for LLM
+llm_instructions:
+  - "Always refer to architecture documentation when making changes"
+  - "Follow the established module organization"
+  - "Maintain separation of concerns"
+  - "Keep dependencies unidirectional"
+  - "Add docstrings and type hints"
+  - "Update relevant documentation when changing code"
+  - "Follow existing patterns in the codebase"
+  - "Consider future extensibility"
+  - "Ensure changes align with roadmap" 

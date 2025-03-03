@@ -52,13 +52,14 @@ nav:
   - Home: index.md
   - User Guide:
     - Getting Started: user-guide/getting-started.md
-    - Project Structure: user-guide/project-structure.md
     - Dependencies: user-guide/dependencies.md
     - Build System: user-guide/build-system.md
     - Commands Reference: user-guide/commands.md
+    - Build Inspector: user-guide/inspect.md
   - Architecture:
     - Overview: architecture/overview.md
     - Package Management: architecture/package-management.md
+    - Project Structure: architecture/project-structure.md
     - Build System: architecture/build-system.md
     - Cache System: architecture/cache-system.md
     - CLI Design: architecture/cli-design.md
@@ -66,6 +67,11 @@ nav:
     - Contributing: development/contributing.md
     - Roadmap: development/roadmap.md
     - Design Decisions: development/design-decisions.md
+    - Core Features:
+      - Package Lock System: development/package-lock.md
+      - Registry Integration: development/registry.md
+      - Dependency Resolution: development/dependency-resolution.md
+      - Build Inspector: development/inspect.md
   - API Reference:
     - Core: api/core.md
     - Build: api/build.md

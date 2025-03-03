@@ -5,34 +5,53 @@ This document outlines the planned development roadmap for Clyde. It's organized
 ## Current Focus (v1.x)
 
 ### Core Functionality
-- [ ] **[CORE-1]** Enhanced dependency resolution
+- [ ] **[CORE-1]** Package Lock System
+  - Lock file implementation (`clyde.lock`)
+  - Semantic versioning support
+  - Exact dependency pinning
+  - Checksum verification
+- [ ] **[CORE-2]** Registry Integration
+  - GitHub repository support
+  - Private registry infrastructure
+  - Package namespacing
+  - Access control and authentication
+- [ ] **[CORE-3]** Enhanced dependency resolution
   - Circular dependency detection
   - Diamond dependency resolution
   - Version conflict resolution
-- [ ] **[CORE-2]** Improved package versioning
-  - Git tag integration
-  - Local version constraints
-  - Version range optimization
 
 ### Build System
-- [ ] **[BUILD-1]** Parallel build optimization
-  - Smart job allocation
+- [ ] **[BUILD-1]** Ninja Integration
+  - Ninja build file generation
+  - Parallel build optimization
   - Resource usage monitoring
   - Build graph optimization
-- [ ] **[BUILD-2]** Incremental builds
+- [ ] **[BUILD-2]** Build Tooling
+  - `compile_commands.json` generation
+  - Cross-compilation support
+  - Toolchain management
+  - Pre/post build hooks
+- [ ] **[BUILD-3]** Incremental builds
   - File change detection
   - Partial rebuilds
   - Header dependency tracking
+- [ ] **[BUILD-4]** Build Visualization
+  - Interactive dependency graph (`clyde inspect`)
+  - Build timing analysis
+  - Cache performance monitoring
+  - Source file exploration
 
-### Cache System
-- [ ] **[CACHE-1]** Advanced caching strategies
-  - Distributed cache support
-  - Network cache sharing
-  - Cache size management
-- [ ] **[CACHE-2]** Cache analytics
-  - Hit/miss statistics
-  - Space usage tracking
-  - Performance metrics
+### Developer Experience
+- [ ] **[DEV-1]** Interactive Tools
+  - Interactive project initialization
+  - Rich progress indicators
+  - Build visualization
+  - Error reporting improvements
+- [ ] **[DEV-2]** Plugin System
+  - Plugin architecture
+  - Hook system
+  - Custom builders
+  - Extension points
 
 ## Near-Term Goals (v2.x)
 
@@ -41,10 +60,11 @@ This document outlines the planned development roadmap for Clyde. It's organized
   - Platform-specific builds
   - ABI compatibility checking
   - Version tagging
-- [ ] **[DIST-2]** Package registry
-  - Central package index
-  - Package metadata
-  - Security scanning
+- [ ] **[DIST-2]** Custom Registry Service
+  - FastAPI/Flask backend
+  - Modern web UI
+  - Package metadata API
+  - Search functionality
 
 ### Development Tools
 - [ ] **[TOOLS-1]** IDE integration
@@ -61,22 +81,35 @@ This document outlines the planned development roadmap for Clyde. It's organized
   - Unit test support
   - Integration test framework
   - Benchmark tools
-- [ ] **[CI-2]** CI/CD pipelines
-  - GitHub Actions integration
-  - GitLab CI support
+- [ ] **[CI-2]** CI/CD Templates
+  - GitHub Actions workflows
+  - GitLab CI templates
   - Jenkins pipeline templates
+  - Azure Pipelines support
 
 ## Long-Term Vision (v3.x+)
 
-### Ecosystem
-- [ ] **[ECO-1]** Package ecosystem
-  - Community repository
-  - Package verification
-  - Author tools
-- [ ] **[ECO-2]** Documentation system
-  - Automated API docs
-  - Example generation
-  - Interactive tutorials
+### Workspace Support
+- [ ] **[WORK-1]** Workspace Management
+  - Multi-package workspaces
+  - Shared dependency resolution
+  - Common configuration inheritance
+  - Parallel workspace operations
+- [ ] **[WORK-2]** Workspace Tools
+  - Cross-package linking
+  - Workspace-wide commands
+  - Development environment setup
+
+### Security Features
+- [ ] **[SEC-1]** Package Security
+  - Package signing
+  - Dependency auditing
+  - Supply chain security
+  - License compliance checking
+- [ ] **[SEC-2]** Security Tools
+  - Vulnerability scanning
+  - Security policy enforcement
+  - Audit logging
 
 ### Enterprise Features
 - [ ] **[ENT-1]** Enterprise support
@@ -87,16 +120,6 @@ This document outlines the planned development roadmap for Clyde. It's organized
   - License checking
   - Security scanning
   - Vulnerability tracking
-
-### Advanced Features
-- [ ] **[ADV-1]** Cross-compilation
-  - Multiple target support
-  - Toolchain management
-  - Platform detection
-- [ ] **[ADV-2]** Plugin system
-  - Custom builders
-  - Package hooks
-  - Build extensions
 
 ## Implementation Notes
 
@@ -135,13 +158,13 @@ This roadmap is structured for both human readers and LLMs:
 ### Feature Tags
 - **[CORE-*]**: Core functionality
 - **[BUILD-*]**: Build system
-- **[CACHE-*]**: Cache system
+- **[DEV-*]**: Developer experience
 - **[DIST-*]**: Distribution
 - **[TOOLS-*]**: Development tools
 - **[CI-*]**: CI/CD features
-- **[ECO-*]**: Ecosystem
+- **[WORK-*]**: Workspace features
+- **[SEC-*]**: Security features
 - **[ENT-*]**: Enterprise features
-- **[ADV-*]**: Advanced features
 
 ### Priority Mapping
 ```python

@@ -93,7 +93,7 @@ Dependencies are linked in the correct order to resolve symbols:
 
 ### Resolution Process
 
-<div class="mermaid">
+```mermaid
 graph TD
     A[Load Package] --> B[Parse Dependencies]
     B --> C[Resolve Versions]
