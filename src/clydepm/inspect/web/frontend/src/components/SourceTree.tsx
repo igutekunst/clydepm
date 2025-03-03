@@ -34,11 +34,45 @@ export const SourceTree: React.FC<SourceTreeProps> = ({
                 type: tree.type as 'source' | 'header',
                 size: 0,
                 warnings: [],
+                included_by: [
+                    'src/main.cpp',
+                    'src/other_file.cpp'
+                ],
+                includes: [
+                    // System headers
+                    '<vector>',
+                    '<string>',
+                    '<memory>',
+                    // Project headers
+                    '"my-project/config.h"',
+                    '"my-project/utils.h"',
+                    // Local headers
+                    '"../include/local.h"'
+                ],
                 compiler_command: {
                     command_line: `clang++ -c ${tree.path}`,
                     duration_ms: 0,
                     cache_hit: false,
-                    flags: ['-Wall', '-Wextra', '-std=c++17']
+                    flags: ['-Wall', '-Wextra', '-std=c++17'],
+                    include_paths: [
+                        {
+                            path: '/usr/include',
+                            type: 'system'
+                        },
+                        {
+                            path: 'include',
+                            type: 'user'
+                        },
+                        {
+                            path: 'deps/fmt/include',
+                            type: 'dependency',
+                            from_package: 'fmt'
+                        }
+                    ],
+                    defines: {
+                        'DEBUG': '1',
+                        'VERSION': '"1.0.0"'
+                    }
                 }
             };
             console.log('Calling onFileSelect with constructed fileInfo:', fileInfo);

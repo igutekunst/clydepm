@@ -72,6 +72,8 @@ export interface CompilerCommand {
     duration_ms: number;
     cache_hit: boolean;
     flags: string[];
+    include_paths: IncludePath[];
+    defines?: Record<string, string | null>;
 }
 
 export interface BuildWarning {
@@ -85,6 +87,8 @@ export interface SourceFile {
     size: number;
     compiler_command?: CompilerCommand;
     warnings?: BuildWarning[];
+    included_by?: string[];
+    includes?: string[];
 }
 
 export interface SourceTree {
