@@ -43,17 +43,43 @@ class VersionResolver:
             1. Sort by major.minor.patch numerically
             2. A prerelease version has lower precedence than its associated normal version
             3. Prerelease versions are sorted by their identifiers
+            4. A prerelease version can only satisfy a range if:
+               - The range explicitly includes a prerelease version with the same major.minor.patch
+               - Or we're doing an exact version match
         """
         # Filter compatible versions and sort in descending order
         compatible_versions = [
             v for v in available_versions
             if constraints.matches(v)
         ]
-        print("available_versions", available_versions)
-        print("constraints", constraints)
-        print("compatible_versions", compatible_versions)
-        print("sorted", sorted(compatible_versions, reverse=True))
-        return sorted(compatible_versions, reverse=True)
+        
+        # Sort versions according to SemVer rules
+        sorted_versions = sorted(compatible_versions, reverse=True)
+        
+        # Move prerelease versions after their associated normal version
+        final_versions = []
+        normal_versions = [v for v in sorted_versions if not v.prerelease]
+        prerelease_versions = [v for v in sorted_versions if v.prerelease]
+        
+        # Group prerelease versions by their base version
+        prerelease_by_base = {}
+        for v in prerelease_versions:
+            base = (v.major, v.minor, v.patch)
+            prerelease_by_base.setdefault(base, []).append(v)
+            
+        # Insert prerelease versions after their base version
+        for v in normal_versions:
+            final_versions.append(v)
+            base = (v.major, v.minor, v.patch)
+            if base in prerelease_by_base:
+                final_versions.extend(sorted(prerelease_by_base[base], reverse=True))
+                del prerelease_by_base[base]
+                
+        # Add any remaining prerelease versions (those without a base version)
+        for versions in prerelease_by_base.values():
+            final_versions.extend(sorted(versions, reverse=True))
+            
+        return final_versions
         
     @staticmethod
     def find_minimal_compatible(version_a: Version,

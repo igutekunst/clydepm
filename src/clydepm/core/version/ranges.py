@@ -118,10 +118,11 @@ class Constraint:
         """Check if a version matches this constraint.
         
         According to SemVer spec:
-        1. A prerelease version can only satisfy a range if:
-           - The range explicitly includes a prerelease version with the same major.minor.patch
-           - Or we're doing an exact version match
-        2. Otherwise, prerelease versions should be ignored
+        1. A prerelease version has lower precedence than its associated normal version
+        2. For exact matches, compare everything including prerelease
+        3. For range matches:
+           - If version is a prerelease and we're not allowing them, reject
+           - Otherwise compare using the operator
         
         Args:
             version: Version to check
@@ -147,34 +148,46 @@ class Constraint:
             print("  Prerelease not allowed: False")
             return False
             
+        # For range matches, compare base versions first
+        base_version = Version(
+            major=version.major,
+            minor=version.minor,
+            patch=version.patch
+        )
+        base_constraint = Version(
+            major=self.version.major,
+            minor=self.version.minor,
+            patch=self.version.patch
+        )
+        
         # Compare using the operator
         if self.operator == Operator.GT:
-            result = version > self.version
+            result = base_version > base_constraint
             print(f"  GT: {result}")
             return result
         elif self.operator == Operator.LT:
-            result = version < self.version
+            result = base_version < base_constraint
             print(f"  LT: {result}")
             return result
         elif self.operator == Operator.GTE:
-            result = version >= self.version
+            result = base_version >= base_constraint
             print(f"  GTE: {result}")
             return result
         elif self.operator == Operator.LTE:
-            result = version <= self.version
+            result = base_version <= base_constraint
             print(f"  LTE: {result}")
             return result
         elif self.operator == Operator.CARET:
             # Compatible with same major version
-            result = (version.major == self.version.major and 
-                     version >= self.version)
+            result = (base_version.major == base_constraint.major and 
+                     base_version >= base_constraint)
             print(f"  CARET: {result}")
             return result
         elif self.operator == Operator.TILDE:
             # Compatible with same minor version
-            result = (version.major == self.version.major and
-                     version.minor == self.version.minor and
-                     version >= self.version)
+            result = (base_version.major == base_constraint.major and
+                     base_version.minor == base_constraint.minor and
+                     base_version >= base_constraint)
             print(f"  TILDE: {result}")
             return result
         return False
@@ -212,6 +225,7 @@ class VersionRange:
         According to SemVer spec:
         1. A prerelease version can only satisfy a range if:
            - The range explicitly includes a prerelease version with the same major.minor.patch
+           - Or the range includes the base version of the prerelease
            - Or we're doing an exact version match
         2. Otherwise, prerelease versions should be ignored
         """
@@ -241,18 +255,26 @@ class VersionRange:
             if not base_matches:
                 return False
                 
-            # Then check if any constraint explicitly includes prereleases
-            has_prerelease_constraint = False
+            # Then check if any constraint has a prerelease with same base version
+            has_matching_prerelease = False
             for c in self.constraints:
-                if c.version.prerelease:
-                    has_prerelease_constraint = True
+                if (c.version.prerelease and
+                    c.version.major == version.major and
+                    c.version.minor == version.minor and
+                    c.version.patch == version.patch):
+                    has_matching_prerelease = True
                     break
                     
-            print(f"  Has prerelease constraint: {has_prerelease_constraint}")
-            if not has_prerelease_constraint:
-                return False
+            print(f"  Has matching prerelease: {has_matching_prerelease}")
+            
+            # If no matching prerelease, check if base version matches all constraints
+            if not has_matching_prerelease:
+                # If base version matches all constraints, allow the prerelease
+                result = all(c.matches(version, allow_prerelease=True) for c in self.constraints)
+                print(f"  Final result: {result}")
+                return result
                 
-            # Finally check if version satisfies all constraints, allowing prereleases
+            # If has matching prerelease, check all constraints with prerelease allowed
             result = all(c.matches(version, allow_prerelease=True) for c in self.constraints)
             print(f"  Final result: {result}")
             return result
