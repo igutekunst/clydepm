@@ -2,7 +2,7 @@
 API models for the build inspector web interface.
 """
 from datetime import datetime
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Literal
 from enum import Enum
 from pydantic import BaseModel
 
@@ -12,16 +12,16 @@ class Position(BaseModel):
     y: float
 
 class IncludePathType(str, Enum):
+    """Types of include paths"""
     SYSTEM = "system"
-    PUBLIC = "public"
-    PRIVATE = "private"
+    USER = "user"
     DEPENDENCY = "dependency"
 
 class IncludePath(BaseModel):
     """An include path used during compilation"""
     path: str
-    type: IncludePathType
-    from_package: Optional[str]
+    type: Literal["system", "user", "dependency"]
+    from_package: Optional[str] = None
 
 class CompilerCommand(BaseModel):
     """Compilation command for a source file"""
@@ -31,7 +31,7 @@ class CompilerCommand(BaseModel):
     command_line: str
     flags: List[str]
     include_paths: List[IncludePath]
-    defines: Dict[str, Optional[str]]
+    defines: Optional[Dict[str, Optional[str]]] = None
     timestamp: datetime
     duration_ms: float
     cache_hit: bool
@@ -39,32 +39,28 @@ class CompilerCommand(BaseModel):
 
 class BuildWarning(BaseModel):
     """A compiler warning"""
-    file: str
-    line: int
-    column: int
+    location: str
     message: str
-    level: str
-    flag: Optional[str]
 
 class SourceFile(BaseModel):
     """A source or header file in the package"""
     path: str
-    type: str
+    type: Literal["source", "header"]
     size: int
     last_modified: datetime
-    compiler_command: Optional[CompilerCommand]
-    included_by: List[str]
-    includes: List[str]
-    warnings: List[BuildWarning]
+    compiler_command: Optional[CompilerCommand] = None
+    warnings: Optional[List[BuildWarning]] = None
+    included_by: Optional[List[str]] = None
+    includes: Optional[List[str]] = None
     object_size: Optional[int]
 
 class SourceTree(BaseModel):
     """Tree structure of source files"""
     name: str
     path: str
-    type: str
-    children: Optional[List['SourceTree']]
-    file_info: Optional[SourceFile]
+    type: Literal["directory", "source", "header"]
+    children: Optional[List["SourceTree"]] = None
+    file_info: Optional[SourceFile] = None
 
 class BuildMetrics(BaseModel):
     """Build metrics data."""

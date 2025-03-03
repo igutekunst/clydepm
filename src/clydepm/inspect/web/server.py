@@ -1,11 +1,11 @@
 """
 FastAPI server for the build inspector web interface.
 """
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, APIRouter
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 from datetime import datetime, timezone
 
 from .models import (
@@ -17,7 +17,9 @@ from .models import (
     Position,
     SourceTree,
     IncludePath,
-    IncludePathType
+    IncludePathType,
+    SourceFile,
+    CompilerCommand
 )
 
 app = FastAPI(
@@ -108,7 +110,7 @@ EXAMPLE_NODES = [
         source_tree=generate_example_source_tree("my-app"),
         include_paths=[
             IncludePath(path="/usr/include", type=IncludePathType.SYSTEM, from_package=None),
-            IncludePath(path="include", type=IncludePathType.PUBLIC, from_package=None)
+            IncludePath(path="include", type=IncludePathType.USER, from_package=None)
         ],
         build_metrics=generate_example_build_metrics("my-app"),
         compiler_config={"CXX": "g++", "CXXFLAGS": "-O2 -Wall"}
@@ -127,7 +129,7 @@ EXAMPLE_NODES = [
         source_tree=generate_example_source_tree("fmt"),
         include_paths=[
             IncludePath(path="/usr/include", type=IncludePathType.SYSTEM, from_package=None),
-            IncludePath(path="include/fmt", type=IncludePathType.PUBLIC, from_package="fmt")
+            IncludePath(path="include/fmt", type=IncludePathType.USER, from_package="fmt")
         ],
         build_metrics=generate_example_build_metrics("fmt"),
         compiler_config={"CXX": "g++", "CXXFLAGS": "-O2"}
@@ -146,7 +148,7 @@ EXAMPLE_NODES = [
         source_tree=generate_example_source_tree("spdlog"),
         include_paths=[
             IncludePath(path="/usr/include", type=IncludePathType.SYSTEM, from_package=None),
-            IncludePath(path="include/spdlog", type=IncludePathType.PUBLIC, from_package="spdlog"),
+            IncludePath(path="include/spdlog", type=IncludePathType.USER, from_package="spdlog"),
             IncludePath(path="fmt/include", type=IncludePathType.DEPENDENCY, from_package="fmt")
         ],
         build_metrics=generate_example_build_metrics("spdlog"),
@@ -166,7 +168,7 @@ EXAMPLE_NODES = [
         source_tree=generate_example_source_tree("catch2"),
         include_paths=[
             IncludePath(path="/usr/include", type=IncludePathType.SYSTEM, from_package=None),
-            IncludePath(path="include", type=IncludePathType.PUBLIC, from_package=None)
+            IncludePath(path="include", type=IncludePathType.USER, from_package=None)
         ],
         build_metrics=generate_example_build_metrics("catch2"),
         compiler_config={"CXX": "g++", "CXXFLAGS": "-O2"}
@@ -277,6 +279,61 @@ async def get_build_metrics() -> BuildMetrics:
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/file-info/{file_path:path}")
+async def get_file_info(file_path: str) -> SourceFile:
+    try:
+        # This is where you'll eventually integrate with your build system
+        # For now, return mock data based on file type
+        is_header = file_path.endswith(('.h', '.hpp', '.hxx'))
+        now = datetime.now(timezone.utc)
+        
+        return SourceFile(
+            path=file_path,
+            type="header" if is_header else "source",
+            size=1024,  # Mock size
+            last_modified=now,  # Required field
+            included_by=[
+                'src/main.cpp',
+                'src/other_file.cpp'
+            ] if is_header else [],
+            includes=[
+                '<vector>',
+                '<string>',
+                '<memory>',
+                '"my-project/config.h"',
+                '"my-project/utils.h"',
+                '"../include/local.h"'
+            ],
+            compiler_command=CompilerCommand(
+                compiler="clang++",  # Required field
+                source_file=file_path,  # Required field
+                output_file=f"{file_path}.o",  # Required field
+                command_line=f"clang++ -c {file_path}",
+                duration_ms=0,
+                cache_hit=False,
+                cache_key="mock-key",  # Required field
+                timestamp=now,  # Required field
+                flags=['-Wall', '-Wextra', '-std=c++17'],
+                include_paths=[
+                    IncludePath(path='/usr/include', type=IncludePathType.SYSTEM),
+                    IncludePath(path='include', type=IncludePathType.USER),
+                    IncludePath(
+                        path='deps/fmt/include',
+                        type=IncludePathType.DEPENDENCY,
+                        from_package='fmt'
+                    )
+                ],
+                defines={
+                    'DEBUG': '1',
+                    'VERSION': '"1.0.0"'
+                }
+            ),
+            warnings=[],
+            object_size=None
+        )
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 # Serve frontend in production
 frontend_path = Path(__file__).parent / "frontend" / "dist"

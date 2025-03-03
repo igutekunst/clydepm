@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { SourceTree as SourceTreeType, SourceFile } from '../types';
+import { fetchFileInfo } from '../api/client';
 
 interface SourceTreeProps {
     tree: SourceTreeType;
@@ -15,8 +16,9 @@ export const SourceTree: React.FC<SourceTreeProps> = ({
     level = 0
 }) => {
     const [isExpanded, setIsExpanded] = useState(level < 2);
+    const [isLoading, setIsLoading] = useState(false);
 
-    const handleClick = (e: React.MouseEvent) => {
+    const handleClick = async (e: React.MouseEvent) => {
         e.stopPropagation();
         
         console.log('Tree node clicked:', {
@@ -28,56 +30,16 @@ export const SourceTree: React.FC<SourceTreeProps> = ({
         if (tree.type === 'directory') {
             setIsExpanded(!isExpanded);
         } else {
-            // For non-directory nodes, always create a SourceFile
-            const fileInfo: SourceFile = tree.file_info || {
-                path: tree.path,
-                type: tree.type as 'source' | 'header',
-                size: 0,
-                warnings: [],
-                // Only set included_by for header files
-                included_by: tree.type === 'header' ? [
-                    'src/main.cpp',
-                    'src/other_file.cpp'
-                ] : [],
-                includes: [
-                    // System headers
-                    '<vector>',
-                    '<string>',
-                    '<memory>',
-                    // Project headers
-                    '"my-project/config.h"',
-                    '"my-project/utils.h"',
-                    // Local headers
-                    '"../include/local.h"'
-                ],
-                compiler_command: {
-                    command_line: `clang++ -c ${tree.path}`,
-                    duration_ms: 0,
-                    cache_hit: false,
-                    flags: ['-Wall', '-Wextra', '-std=c++17'],
-                    include_paths: [
-                        {
-                            path: '/usr/include',
-                            type: 'system'
-                        },
-                        {
-                            path: 'include',
-                            type: 'user'
-                        },
-                        {
-                            path: 'deps/fmt/include',
-                            type: 'dependency',
-                            from_package: 'fmt'
-                        }
-                    ],
-                    defines: {
-                        'DEBUG': '1',
-                        'VERSION': '"1.0.0"'
-                    }
-                }
-            };
-            console.log('Calling onFileSelect with constructed fileInfo:', fileInfo);
-            onFileSelect(fileInfo);
+            try {
+                setIsLoading(true);
+                const fileInfo = await fetchFileInfo(tree.path);
+                onFileSelect(fileInfo);
+            } catch (error) {
+                console.error('Failed to fetch file info:', error);
+                // You might want to show an error message to the user
+            } finally {
+                setIsLoading(false);
+            }
         }
     };
 
@@ -86,7 +48,7 @@ export const SourceTree: React.FC<SourceTreeProps> = ({
     return (
         <div className="source-tree-node">
             <div
-                className={`tree-item ${tree.type} ${isSelected ? 'selected' : ''}`}
+                className={`tree-item ${tree.type} ${isSelected ? 'selected' : ''} ${isLoading ? 'loading' : ''}`}
                 onClick={handleClick}
                 style={{ paddingLeft: `${level * 20}px` }}
             >
@@ -98,6 +60,7 @@ export const SourceTree: React.FC<SourceTreeProps> = ({
                 {tree.file_info?.warnings?.length > 0 && (
                     <span className="warning-count">⚠️ {tree.file_info.warnings.length}</span>
                 )}
+                {isLoading && <span className="loading-indicator">⌛</span>}
             </div>
             {isExpanded && tree.children && tree.children.length > 0 && (
                 <div className="children">

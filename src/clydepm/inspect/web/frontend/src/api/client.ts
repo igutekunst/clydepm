@@ -1,4 +1,5 @@
 import { DependencyGraph, PackageDetails, BuildMetrics, GraphSettings } from '../types';
+import type { SourceFile } from '../types';
 
 const API_BASE = '/api';
 
@@ -23,5 +24,13 @@ export async function fetchBuildMetrics(): Promise<BuildMetrics> {
 export async function fetchGraphSettings(): Promise<GraphSettings> {
     const response = await fetch(`${API_BASE}/graph-settings`);
     if (!response.ok) throw new Error('Failed to fetch graph settings');
+    return response.json();
+}
+
+export async function fetchFileInfo(filePath: string): Promise<SourceFile> {
+    const response = await fetch(`/api/file-info/${encodeURIComponent(filePath)}`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch file info: ${response.statusText}`);
+    }
     return response.json();
 } 
