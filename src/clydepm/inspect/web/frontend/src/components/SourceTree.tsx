@@ -34,10 +34,11 @@ export const SourceTree: React.FC<SourceTreeProps> = ({
                 type: tree.type as 'source' | 'header',
                 size: 0,
                 warnings: [],
-                included_by: [
+                // Only set included_by for header files
+                included_by: tree.type === 'header' ? [
                     'src/main.cpp',
                     'src/other_file.cpp'
-                ],
+                ] : [],
                 includes: [
                     // System headers
                     '<vector>',
