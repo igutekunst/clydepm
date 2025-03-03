@@ -99,13 +99,13 @@ class Package:
         
     def _load_config(self) -> Dict:
         """Load package configuration from yaml file."""
-        config_file = self.path / "config.yaml"
+        config_file = self.path / "package.yml"
         if not config_file.exists():
-            config_file = self.path / "descriptor.yaml"
+            config_file = self.path / "package.yaml"
             
         if not config_file.exists():
             raise FileNotFoundError(
-                f"No config.yaml or descriptor.yaml found in {self.path}"
+                f"No package.yml or package.yaml found in {self.path}"
             )
             
         with open(config_file) as f:
@@ -118,7 +118,7 @@ class Package:
         # Ensure we save only simple types
         config["type"] = self.package_type.value
         
-        with open(self.path / "config.yaml", "w") as f:
+        with open(self.path / "package.yml", "w") as f:
             yaml.dump(config, f, sort_keys=False, default_flow_style=False)
     
     @property
@@ -161,7 +161,7 @@ class Package:
                     # Handle local dependency with path
                     local_path = spec[6:]  # Remove "local:" prefix
                     dep_path = (self.path / local_path).resolve()
-                    if dep_path.exists() and (dep_path / "config.yaml").exists():
+                    if dep_path.exists() and (dep_path / "package.yml").exists():
                         packages.append(Package(dep_path))
                     else:
                         raise ValueError(f"Local dependency {name} not found at {dep_path}")
@@ -179,7 +179,7 @@ class Package:
                 if not spec.startswith("local:"):
                     # This is a remote dependency, should be in deps/
                     dep_path = self.path / "deps" / name
-                    if dep_path.exists() and (dep_path / "config.yaml").exists():
+                    if dep_path.exists() and (dep_path / "package.yml").exists():
                         packages.append(Package(dep_path))
                     
         return packages

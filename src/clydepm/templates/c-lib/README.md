@@ -37,22 +37,16 @@ clyde build
 
 ## Configuration
 
-See `config.yaml` for build settings and dependencies.
+See `package.yml` for build settings and dependencies.
 
 ## Usage
 
-To use this library in another Clyde project, add it to the dependencies in `config.yaml`:
+To use this library in another Clyde project, add it to the dependencies in `package.yml`:
 
 ```yaml
 requires:
-  # Local dependency (relative path)
-  {{ name }}: "local:../{{ name }}"
-  
-  # Remote dependency (version constraints)
-  {{ name }}: "^{{ version }}"        # Compatible with {{ version }}
-  {{ name }}: "=={{ version }}"       # Exact version
-  {{ name }}: ">=1.0.0"              # Version 1.0.0 or higher
-  {{ name }}: "git:main"             # Specific Git branch/tag/commit
+  {{ name }}: 
+    path: ../{{ name }}
 ```
 
 ## Include Path Structure

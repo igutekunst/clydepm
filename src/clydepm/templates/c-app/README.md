@@ -28,4 +28,4 @@ The program accepts command-line arguments and will display them when run.
 
 ## Configuration
 
-See `config.yaml` for build settings and dependencies. 
+See `package.yml` for build settings and dependencies. 

@@ -1,0 +1,8 @@
+name: multi-file-test
+version: 0.1.0
+type: application
+language: cpp
+
+sources:
+  - src/main.cpp
+  - src/greeter.cpp 

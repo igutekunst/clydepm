@@ -1,0 +1,12 @@
+name: {{name}}
+version: {{version}}
+type: application
+language: cpp
+
+sources:
+  - src/main.cpp
+
+cflags:
+  g++: -Wall -Wextra -std=c++17
+
+requires: {} 

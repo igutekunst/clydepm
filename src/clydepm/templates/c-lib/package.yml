@@ -1,0 +1,12 @@
+name: {{name}}
+version: {{version}}
+type: library
+language: c
+
+sources:
+  - src/lib.c
+
+cflags:
+  gcc: -Wall -Wextra
+
+requires: {} 

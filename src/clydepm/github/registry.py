@@ -14,6 +14,7 @@ import tarfile
 from github import Github, Repository, GitRelease
 from github.GithubException import GithubException
 from semantic_version import Version
+from rich import print as rprint
 
 from ..core.package import Package, BuildMetadata, CompilerInfo
 
@@ -243,12 +244,15 @@ class GitHubRegistry:
             raise ValueError(
                 f"\n[red]Error: Version {package.version} already exists[/red]\n\n"
                 f"To publish a new version:\n"
-                f"1. Update the version in [bold]config.yaml[/bold]:\n"
-                f"   ```yaml\n"
-                f"   version: {package.version}  # Change this to a new version\n"
-                f"   ```\n\n"
-                f"2. Commit and push your changes\n"
-                f"3. Run [bold]clyde publish[/bold] again\n\n"
+                f"1. Update the version in [bold]package.yml[/bold]:\n"
+                f"   version: {package.version}\n"
+                f"2. Commit and tag the changes:\n"
+                f"   git commit -am 'Release {package.version}'\n"
+                f"   git tag v{package.version}\n"
+                f"3. Push to GitHub:\n"
+                f"   git push origin main --tags\n"
+                f"4. Publish the package:\n"
+                f"   clyde publish\n"
                 f"The existing release can be found at: {existing_release.html_url}"
             )
         except GithubException as e:
@@ -310,12 +314,15 @@ class GitHubRegistry:
                     raise ValueError(
                         f"\n[red]Error: Version {package.version} already exists[/red]\n\n"
                         f"To publish a new version:\n"
-                        f"1. Update the version in [bold]config.yaml[/bold]:\n"
-                        f"   ```yaml\n"
-                        f"   version: {package.version}  # Change this to a new version\n"
-                        f"   ```\n\n"
-                        f"2. Commit and push your changes\n"
-                        f"3. Run [bold]clyde publish[/bold] again\n\n"
+                        f"1. Update the version in [bold]package.yml[/bold]:\n"
+                        f"   version: {package.version}\n"
+                        f"2. Commit and tag the changes:\n"
+                        f"   git commit -am 'Release {package.version}'\n"
+                        f"   git tag v{package.version}\n"
+                        f"3. Push to GitHub:\n"
+                        f"   git push origin main --tags\n"
+                        f"4. Publish the package:\n"
+                        f"   clyde publish\n"
                         f"The existing release can be found at: {repo.html_url}/releases/tag/v{package.version}"
                     )
                 raise ValueError(f"Failed to create release: {e}")
@@ -339,4 +346,9 @@ class GitHubRegistry:
                     logger.warning("Invalid version tag: %s", release.tag_name)
                     continue
         logger.debug("Found versions: %s", versions)
+        return sorted(versions)
+
+    def _print_publish_instructions(self, package: Package) -> None:
+        """Print instructions for publishing a package."""
+        rprint("\nTo publish a new version:\n")
         return sorted(versions) 

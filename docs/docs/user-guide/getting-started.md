@@ -10,48 +10,103 @@ Install Clyde using pip:
 pip install clydepm
 ```
 
-## Creating Your First Project
-
-Clyde provides several templates for both C and C++ projects. Let's explore the different ways to create a project.
-
-### C++ Library
-
-Create a C++ library project:
+## Creating a New Project
 
 ```bash
+# Create a new C++ library project
 clyde init my-lib --type library --lang cpp
-cd my-lib
+
+# Create a new C application
+clyde init my-app --type application --lang c
 ```
 
-This creates a library project with the following structure:
+This creates a new project with the following structure:
+
 ```
-my-lib/
-├── config.yaml        # Project configuration
-├── src/              # Source files
-├── include/          # Public headers
-│   └── my-lib/       # Project-specific headers
-├── private_include/  # Private headers
-└── .gitignore       # Git ignore file
+my-project/
+├── package.yml        # Project configuration
+├── README.md         # Project documentation
+├── src/             # Source files
+│   └── main.cpp
+└── tests/           # Test files
+    └── test_main.cpp
 ```
 
-### C Application
-
-Create a C application project:
+## Building a Project
 
 ```bash
-clyde init my-app --type application --lang c
-cd my-app
+# Build the project
+clyde build
+
+# Build with specific traits
+clyde build -t debug=true
 ```
 
-This creates an application project with:
+## Project Structure
+
+A typical C/C++ project has this structure:
+
 ```
-my-app/
-├── config.yaml       # Project configuration
-├── src/             # Source files
-│   └── main.c       # Main entry point
-├── include/         # Public headers
-└── .gitignore      # Git ignore file
+my-project/
+├── package.yml       # Project configuration
+├── README.md        # Project documentation
+├── src/            # Source files
+│   ├── main.cpp
+│   └── lib.cpp
+├── include/        # Public headers
+│   └── lib.hpp
+└── tests/         # Test files
+    └── test_lib.cpp
 ```
+
+The `package.yml` file defines your project:
+
+```yaml
+name: my-project
+version: 0.1.0
+type: library  # or application
+language: cpp  # or c
+
+sources:
+  - src/main.cpp
+  - src/lib.cpp
+
+requires:
+  fmt: ^8.0.0
+```
+
+## Dependencies
+
+Clyde supports both local and remote dependencies. Add them to `package.yml`:
+
+```yaml
+requires:
+  # Remote dependency
+  fmt: ^8.0.0
+  
+  # Local dependency
+  my-lib: 
+    path: ../my-lib
+```
+
+## Building and Running
+
+```bash
+# Build the project
+clyde build
+
+# Run an application
+clyde run
+
+# Clean build artifacts
+clyde clean
+```
+
+## Next Steps
+
+- [Project Structure](project-structure.md) - Learn more about project organization
+- [Build System](build-system.md) - Understand the build system
+- [Package Management](package-management.md) - Work with dependencies
 
 ## Project Configuration
 
@@ -65,24 +120,6 @@ cflags:              # Compiler flags
   gcc: -std=c11      # For C projects
   g++: -std=c++17    # For C++ projects
 requires: {}         # Dependencies (empty initially)
-```
-
-## Building Your Project
-
-Build your project using:
-
-```bash
-clyde build
-```
-
-Options:
-- `--trait` or `-t`: Set build traits (e.g., `--trait debug=true`)
-- `--verbose` or `-v`: Show compiler commands
-
-For applications, you can run them with:
-
-```bash
-clyde run [args...]
 ```
 
 ## Adding Dependencies
@@ -192,11 +229,4 @@ clyde cache clean
 
 # Clean entire cache
 clyde cache clean --all
-```
-
-## Next Steps
-
-- Learn about [Project Structure](project-structure.md) in detail
-- Understand [Dependencies](dependencies.md) management
-- Explore the [Build System](build-system.md)
-- Check the [Commands Reference](commands.md) 
+``` 

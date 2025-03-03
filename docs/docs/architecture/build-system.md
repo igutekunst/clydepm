@@ -4,6 +4,83 @@ The Clyde Package Manager build system is designed to be efficient, reproducible
 
 ## Overview
 
+The build system is responsible for:
+- Compiling source files
+- Linking dependencies
+- Managing build artifacts
+- Caching build results
+
+## Build Process
+
+1. Load Package
+   - Reads `package.yml`
+   - Validates configuration
+   - Resolves dependencies
+
+2. Prepare Build
+   - Creates build directory
+   - Sets up compiler flags
+   - Configures include paths
+
+3. Compile Sources
+   - Processes each source file
+   - Generates object files
+   - Caches compilation results
+
+4. Link Output
+   - Links object files
+   - Creates final artifact
+   - Handles library dependencies
+
+## Configuration
+
+```yaml
+# package.yml
+name: my-project
+version: 0.1.0
+type: library
+language: cpp
+
+sources:
+  - src/lib.cpp
+  - src/impl.cpp
+
+cflags:
+  gcc: -Wall -Wextra
+  g++: -std=c++17
+
+ldflags:
+  gcc: -lpthread
+  g++: -lstdc++fs
+
+requires:
+  fmt: ^8.0.0
+```
+
+## Build Cache
+
+The build cache:
+- Stores compiled objects
+- Tracks file hashes
+- Manages dependencies
+- Optimizes rebuild time
+
+## Compiler Integration
+
+Supports:
+- GCC
+- Clang
+- Platform-specific flags
+- Custom compiler options
+
+## Build Hooks
+
+Extension points for:
+- Pre-build tasks
+- Post-build tasks
+- Custom build steps
+- Build monitoring
+
 ```mermaid
 graph TD
     A[Package Loading] --> B[Cache Check]

@@ -157,15 +157,26 @@ sequenceDiagram
 
 ## Configuration
 
-### Package Configuration (`config.yaml`)
+### Package Configuration (`package.yml`)
 
 ```yaml
-name: example
-version: 1.0.0
+name: my-project
+version: 0.1.0
 type: library
+language: cpp
+
+sources:
+  - src/lib.cpp
+  - src/impl.cpp
+
 requires:
-  lib1: "^1.0.0"
-  lib2: "local:../lib2"
+  fmt: ^8.0.0
+  my-lib:
+    path: ../my-lib
+
+cflags:
+  gcc: -Wall -Wextra
+  g++: -std=c++17
 ```
 
 ### Cache Configuration

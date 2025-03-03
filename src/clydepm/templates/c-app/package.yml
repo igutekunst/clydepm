@@ -1,0 +1,12 @@
+name: {{name}}
+version: {{version}}
+type: application
+language: c
+
+sources:
+  - src/main.c
+
+cflags:
+  gcc: -Wall -Wextra
+
+requires: {} 

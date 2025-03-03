@@ -1,0 +1,10 @@
+name: deps-test
+version: 0.1.0
+type: application
+language: cpp
+
+sources:
+  - src/main.cpp
+
+requires:
+  formatter: "local:../formatter"
