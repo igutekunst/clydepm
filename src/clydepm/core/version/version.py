@@ -103,91 +103,54 @@ class Version:
             return -1 if len(self_parts) < len(other_parts) else 1
         return 0
         
-    def _compare_key(self) -> Tuple[int, int, int]:
-        """Get comparison key for version sorting.
+    def _compare(self, other: "Version") -> int:
+        """Compare versions.
         
-        Note: Build metadata is ignored in comparisons as per SemVer spec.
+        Returns:
+            -1 if self < other
+            0 if self == other
+            1 if self > other
         """
-        return (self.major, self.minor, self.patch)
+        if not isinstance(other, Version):
+            return NotImplemented
+            
+        # Compare version numbers first
+        self_key = (self.major, self.minor, self.patch)
+        other_key = (other.major, other.minor, other.patch)
+        
+        if self_key < other_key:
+            return -1
+        if self_key > other_key:
+            return 1
+            
+        # If version numbers are equal, compare prerelease
+        return self._compare_prerelease(other)
         
     def __lt__(self, other: "Version") -> bool:
         """Compare versions."""
-        if not isinstance(other, Version):
-            return NotImplemented
-            
-        # Compare version numbers first
-        self_key = (self.major, self.minor, self.patch)
-        other_key = (other.major, other.minor, other.patch)
-        
-        if self_key != other_key:
-            return self_key < other_key
-            
-        # If version numbers are equal, compare prerelease
-        return self._compare_prerelease(other) < 0
+        result = self._compare(other)
+        return result == -1 if result is not NotImplemented else NotImplemented
         
     def __le__(self, other: "Version") -> bool:
         """Compare versions."""
-        if not isinstance(other, Version):
-            return NotImplemented
-            
-        # Compare version numbers first
-        self_key = (self.major, self.minor, self.patch)
-        other_key = (other.major, other.minor, other.patch)
-        
-        if self_key != other_key:
-            return self_key < other_key
-            
-        # If version numbers are equal, compare prerelease
-        return self._compare_prerelease(other) <= 0
+        result = self._compare(other)
+        return result <= 0 if result is not NotImplemented else NotImplemented
         
     def __gt__(self, other: "Version") -> bool:
         """Compare versions."""
-        if not isinstance(other, Version):
-            return NotImplemented
-            
-        # Compare version numbers first
-        self_key = (self.major, self.minor, self.patch)
-        other_key = (other.major, other.minor, other.patch)
-        
-        if self_key != other_key:
-            return self_key > other_key
-            
-        # If version numbers are equal, compare prerelease
-        return self._compare_prerelease(other) > 0
+        result = self._compare(other)
+        return result == 1 if result is not NotImplemented else NotImplemented
         
     def __ge__(self, other: "Version") -> bool:
         """Compare versions."""
-        if not isinstance(other, Version):
-            return NotImplemented
-            
-        # Compare version numbers first
-        self_key = (self.major, self.minor, self.patch)
-        other_key = (other.major, other.minor, other.patch)
-        
-        if self_key != other_key:
-            return self_key > other_key
-            
-        # If version numbers are equal, compare prerelease
-        return self._compare_prerelease(other) >= 0
+        result = self._compare(other)
+        return result >= 0 if result is not NotImplemented else NotImplemented
         
     def __eq__(self, other: object) -> bool:
-        """Check version equality.
-        
-        Note: Build metadata is ignored in equality checks as per SemVer spec.
-        """
-        if not isinstance(other, Version):
-            return NotImplemented
-            
-        # Compare version numbers first
-        self_key = (self.major, self.minor, self.patch)
-        other_key = (other.major, other.minor, other.patch)
-        
-        if self_key != other_key:
-            return False
-            
-        # If version numbers are equal, compare prerelease
-        return self._compare_prerelease(other) == 0
-        
+        """Check version equality."""
+        result = self._compare(other)
+        return result == 0 if result is not NotImplemented else NotImplemented
+
     def is_compatible_with(self, other: "Version") -> bool:
         """Check if this version is compatible with another version.
         
@@ -200,7 +163,7 @@ class Version:
         Returns:
             True if versions are compatible
         """
-        return self.major == other.major 
+        return self.major == other.major
 
     def without_prerelease(self) -> "Version":
         """Return a new version without the prerelease component."""

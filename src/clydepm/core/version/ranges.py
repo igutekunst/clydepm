@@ -53,67 +53,81 @@ class Constraint:
             operator=Operator(operator),
             version=Version.parse(parts["version"])
         )
+
+    def _check_compatibility(self, version: Version, base_version: Version, base_constraint: Version) -> bool:
+        """Check if a version is compatible with this constraint.
         
-    def _get_base_version(self, version: Version) -> Tuple[int, int, int]:
-        """Get the base version without prerelease or build metadata."""
-        return (version.major, version.minor, version.patch)
-        
-    def _compare_prerelease_identifiers(self, ver_a: Version, ver_b: Version) -> bool:
-        """Compare prerelease identifiers according to SemVer rules.
-        
-        Returns True if ver_a has precedence over ver_b.
+        Args:
+            version: Version to check
+            base_version: Version without prerelease
+            base_constraint: Constraint version without prerelease
+            
+        Returns:
+            bool: True if version is compatible
         """
-        if not ver_a.prerelease and not ver_b.prerelease:
-            return True
-        if not ver_a.prerelease and ver_b.prerelease:
-            return True
-        if ver_a.prerelease and not ver_b.prerelease:
-            return False
-            
-        # Both have prereleases - compare each identifier
-        a_ids = ver_a.prerelease.split('.')
-        b_ids = ver_b.prerelease.split('.')
-        
-        for a_id, b_id in zip(a_ids, b_ids):
-            a_is_num = a_id.isdigit()
-            b_is_num = b_id.isdigit()
-            
-            # If both numeric, compare numerically
-            if a_is_num and b_is_num:
-                if int(a_id) != int(b_id):
-                    return int(a_id) >= int(b_id)
-            # If both non-numeric, compare lexically
-            elif not a_is_num and not b_is_num:
-                if a_id != b_id:
-                    return a_id >= b_id
-            # Mixed - numeric has lower precedence
-            else:
-                return not a_is_num
-                
-        # All equal up to the shortest - longer one has precedence
-        return len(a_ids) >= len(b_ids)
-        
-    def _compare_versions(self, version: Version) -> bool:
-        """Compare versions based on operator."""
         if self.operator == Operator.GT:
-            return version > self.version
+            return base_version > base_constraint
         elif self.operator == Operator.LT:
-            return version < self.version
+            return base_version < base_constraint
         elif self.operator == Operator.GTE:
-            return version >= self.version
+            return base_version >= base_constraint
         elif self.operator == Operator.LTE:
+            return base_version <= base_constraint
+        elif self.operator == Operator.CARET:
+            # ^1.2.3 means >=1.2.3 <2.0.0
+            # ^0.2.3 means >=0.2.3 <0.3.0
+            # ^0.0.3 means >=0.0.3 <0.0.4
+            if base_constraint.major > 0:
+                return (base_version >= base_constraint and 
+                       base_version.major == base_constraint.major)
+            elif base_constraint.minor > 0:
+                return (base_version >= base_constraint and
+                       base_version.major == base_constraint.major and
+                       base_version.minor == base_constraint.minor)
+            else:
+                return (base_version >= base_constraint and
+                       base_version.major == base_constraint.major and
+                       base_version.minor == base_constraint.minor and
+                       base_version.patch == base_constraint.patch)
+        elif self.operator == Operator.TILDE:
+            # ~1.2.3 means >=1.2.3 <1.3.0
+            return (base_version >= base_constraint and
+                   base_version.major == base_constraint.major and
+                   base_version.minor == base_constraint.minor)
+        return False
+
+    def _check_prerelease_compatibility(self, version: Version) -> bool:
+        """Check if a prerelease version is compatible with this constraint.
+        
+        Args:
+            version: Version to check
+            
+        Returns:
+            bool: True if version is compatible
+        """
+        if self.operator in (Operator.GT, Operator.GTE):
+            return version >= self.version
+        elif self.operator in (Operator.LT, Operator.LTE):
             return version <= self.version
         elif self.operator == Operator.CARET:
-            # Compatible with same major version
-            return (version.major == self.version.major and 
-                   version >= self.version)
+            if self.version.major > 0:
+                return (version >= self.version and 
+                       version.major == self.version.major)
+            elif self.version.minor > 0:
+                return (version >= self.version and
+                       version.major == self.version.major and
+                       version.minor == self.version.minor)
+            else:
+                return (version >= self.version and
+                       version.major == self.version.major and
+                       version.minor == self.version.minor and
+                       version.patch == self.version.patch)
         elif self.operator == Operator.TILDE:
-            # Compatible with same minor version
-            return (version.major == self.version.major and
-                   version.minor == self.version.minor and
-                   version >= self.version)
+            return (version >= self.version and
+                   version.major == self.version.major and
+                   version.minor == self.version.minor)
         return False
-        
+
     def matches(self, version: Version, allow_prerelease: bool = False) -> bool:
         """Check if a version matches this constraint.
         
@@ -137,43 +151,7 @@ class Constraint:
         base_constraint = self.version.without_prerelease()
 
         # Check if base version matches the constraint
-        matches = False
-        if self.operator == Operator.GT:
-            matches = base_version > base_constraint
-            print(f"  GT: {matches}")
-        elif self.operator == Operator.LT:
-            matches = base_version < base_constraint
-            print(f"  LT: {matches}")
-        elif self.operator == Operator.GTE:
-            matches = base_version >= base_constraint
-            print(f"  GTE: {matches}")
-        elif self.operator == Operator.LTE:
-            matches = base_version <= base_constraint
-            print(f"  LTE: {matches}")
-        elif self.operator == Operator.CARET:
-            # ^1.2.3 means >=1.2.3 <2.0.0
-            # ^0.2.3 means >=0.2.3 <0.3.0
-            # ^0.0.3 means >=0.0.3 <0.0.4
-            if base_constraint.major > 0:
-                matches = (base_version >= base_constraint and 
-                         base_version.major == base_constraint.major)
-            elif base_constraint.minor > 0:
-                matches = (base_version >= base_constraint and
-                         base_version.major == base_constraint.major and
-                         base_version.minor == base_constraint.minor)
-            else:
-                matches = (base_version >= base_constraint and
-                         base_version.major == base_constraint.major and
-                         base_version.minor == base_constraint.minor and
-                         base_version.patch == base_constraint.patch)
-            print(f"  CARET: {matches}")
-        elif self.operator == Operator.TILDE:
-            # ~1.2.3 means >=1.2.3 <1.3.0
-            matches = (base_version >= base_constraint and
-                      base_version.major == base_constraint.major and
-                      base_version.minor == base_constraint.minor)
-            print(f"  TILDE: {matches}")
-
+        matches = self._check_compatibility(version, base_version, base_constraint)
         if not matches:
             print(f"  Base version matches: False")
             return False
@@ -190,27 +168,7 @@ class Constraint:
                 return False
 
             # For range operators, check if version satisfies the constraint
-            if self.operator in (Operator.GT, Operator.GTE):
-                result = version >= self.version
-            elif self.operator in (Operator.LT, Operator.LTE):
-                result = version <= self.version
-            elif self.operator == Operator.CARET:
-                if self.version.major > 0:
-                    result = (version >= self.version and 
-                            version.major == self.version.major)
-                elif self.version.minor > 0:
-                    result = (version >= self.version and
-                            version.major == self.version.major and
-                            version.minor == self.version.minor)
-                else:
-                    result = (version >= self.version and
-                            version.major == self.version.major and
-                            version.minor == self.version.minor and
-                            version.patch == self.version.patch)
-            elif self.operator == Operator.TILDE:
-                result = (version >= self.version and
-                         version.major == self.version.major and
-                         version.minor == self.version.minor)
+            result = self._check_prerelease_compatibility(version)
             print(f"  Final result: {result}")
             return result
 
