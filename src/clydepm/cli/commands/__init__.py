@@ -9,7 +9,7 @@ from .search import search
 from .publish import publish
 from .install import install
 from .cache import app as cache
-
+from .inspect import app as inspect
 __all__ = [
     "init",
     "build",
@@ -19,4 +19,5 @@ __all__ = [
     "publish",
     "install",
     "cache",
+    "inspect",
 ]

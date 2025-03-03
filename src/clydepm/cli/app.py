@@ -12,7 +12,8 @@ from .commands.run import run
 from .commands.auth import auth
 from .commands.publish import publish
 from .commands.install import install
-from .commands.cache import cache
+from .commands.cache import app as cache_app
+from .commands.inspect import app as inspect_app
 
 # Set up logging
 logger = logging.getLogger("clydepm")
@@ -30,7 +31,10 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 # Create typer app
-app = typer.Typer()
+app = typer.Typer(
+    help="Clyde Package Manager - Modern C/C++ dependency management",
+    no_args_is_help=True
+)
 
 # Add commands
 app.command()(init)
@@ -39,7 +43,10 @@ app.command()(run)
 app.command()(auth)
 app.command()(publish)
 app.command()(install)
-app.command()(cache)
+
+# Add subcommands
+app.add_typer(cache_app, name="cache")
+app.add_typer(inspect_app, name="inspect", help="Build inspection tools")
 
 
 def main():

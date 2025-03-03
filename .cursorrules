@@ -1,4 +1,68 @@
 # Cursor Rules for Clyde Package Manager
+## Instructions for LLM
+llm_instructions:
+  - "Always refer to documentation when making changes"
+  - "Follow the established module organization"
+  - "Maintain separation of concerns"
+  - "Keep dependencies unidirectional"
+  - "Add docstrings and type hints"
+  - "Update relevant documentation when changing code"
+  - "Suggest breaking apart large files when they get too long"
+  - "Suggest refactoring code to improve readability and maintainability"
+  - "Don't make assumptions about the codebase, ask questions instead"
+  - "Don't make large changes without discussing them first"
+  - "Follow existing patterns in the codebase"
+  - "Consider future extensibility"
+  - "Ensure changes align with roadmap"
+  - "Suggest updating .cursorrules when making changes"
+
+# Language and Library Standards
+language_standards:
+  python:
+    version: ">=3.9"  # Based on type hint usage in version.py
+    style_guide: "PEP 8"
+    type_hints: required
+    docstrings: google_style  # Observed in version.py and other modules
+
+library_choices:
+  core_dependencies:
+    - dataclasses  # Used for Version, Constraint classes
+    - typing  # For type hints
+    - re  # For version parsing
+    - enum  # For Operator enums
+    
+  testing:
+    framework: pytest  # Evident from test files
+    fixtures: pytest.fixture
+    assertions: pytest.raises
+    
+  cli:
+    framework: typer  # Inferred from cli module organization
+    description: "Command-line interface parsing and handling"
+    
+  serialization:
+    format: yaml  # For config files and package metadata
+    library: pyyaml
+    
+  logging:
+    framework: logging  # Python standard library
+    level: INFO
+    format: structured
+
+
+# Consistency Rules
+consistency_rules:
+  - "Use dataclasses for data structures"
+  - "Follow Google-style docstrings"
+  - "Include type hints for all functions"
+  - "Use pytest for all testing"
+  - "Maintain consistent error handling patterns"
+  - "Use typer for all CLI interactions"
+  - "Follow established module organization"
+  - "Place each CLI command in its own file under cli/commands/"
+  - "Use rich for console output formatting"
+  - "Handle errors consistently with rich error messages"
+
 
 # Documentation References
 docs_path: docs/docs/
@@ -73,6 +137,34 @@ module_rules:
       - Command routing
       - User interaction
       - Error handling
+    submodules:
+      commands:
+        path: commands/
+        description: "Individual command implementations"
+        files:
+          - init.py: "Project initialization command"
+          - build.py: "Build command"
+          - run.py: "Run command"
+          - auth.py: "Authentication command"
+          - publish.py: "Package publishing command"
+          - install.py: "Package installation command"
+          - cache.py: "Cache management command"
+          - inspect.py: "Build inspection command"
+        rules:
+          - "Each command should be in its own file"
+          - "Use typer for command definition"
+          - "Use rich for output formatting"
+          - "Follow consistent error handling patterns"
+          - "Include comprehensive help text"
+          - "Group related commands using typer.Typer()"
+      
+      models:
+        path: models/
+        description: "CLI-specific data models"
+        
+      utils:
+        path: utils/
+        description: "CLI utilities"
       
   github:
     path: src/clydepm/github
@@ -88,11 +180,28 @@ module_rules:
       - Template management
       - Scaffolding
 
+  inspect:
+    path: src/clydepm/inspect
+    description: "Build inspection tools"
+    responsibilities:
+      - Build analysis
+      - Dependency visualization
+      - Metrics collection
+    submodules:
+      web:
+        path: web/
+        description: "Web interface for build inspection"
+        files:
+          - server.py: "FastAPI server implementation"
+          - models.py: "API data models"
+          - frontend/: "React frontend application"
+
 # Dependency Rules
 allowed_dependencies:
   cli:
     - core
     - build
+    - inspect
   build:
     - core
   github:
@@ -103,6 +212,9 @@ allowed_dependencies:
     - core.version
     - core.dependency
     - core.config
+  inspect:
+    - core
+    - build
 
 # File Size Rules
 max_file_sizes:
@@ -111,6 +223,7 @@ max_file_sizes:
     "core/package.py": 300
     "build/builder.py": 400
     "cli/app.py": 200
+    "cli/commands/*.py": 150
 
 # Naming Conventions
 naming:
@@ -139,45 +252,9 @@ future_modules:
     
   inspect:
     path: src/clydepm/inspect
+    docs_path: docs/inspect.md
     description: "Build inspection tools"
     
   plugins:
     path: src/clydepm/plugins
     description: "Plugin system"
-
-# Instructions for LLM
-llm_instructions:
-  - "Always refer to architecture documentation when making changes"
-  - "Follow the established module organization"
-  - "Maintain separation of concerns"
-  - "Keep dependencies unidirectional"
-  - "Add docstrings and type hints"
-  - "Update relevant documentation when changing code"
-  - "Suggest breaking apart large files when they get too long"
-  - "Suggest refactoring code to improve readability and maintainability"
-  - "Don't make assumptions about the codebase, ask questions instead"
-  - "Don't make large changes without discussing them first"
-  - "Follow existing patterns in the codebase"
-  - "Consider future extensibility"
-  - "Ensure changes align with roadmap"
-  - "Suggest updating .cursorrules when making changes"
-
-# Module-Specific Rules
-module_specific_rules:
-  core.version:
-    - "Use semantic versioning (SemVer) for all version handling"
-    - "Implement strict version parsing"
-    - "Support version ranges and constraints"
-    - "Cache version parsing results"
-    
-  core.dependency:
-    - "Use efficient graph algorithms"
-    - "Implement cycle detection"
-    - "Handle diamond dependencies"
-    - "Support override resolution"
-    
-  core.config:
-    - "Validate all config files against schemas"
-    - "Support environment variables"
-    - "Handle config inheritance"
-    - "Cache parsed configs"
