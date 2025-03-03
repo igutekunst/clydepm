@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { fetchPackageDetails } from '../api/client';
-import type { PackageDetails } from '../types';
+import type { DependencyNode } from '../types';
+import { BuildInspector } from './BuildInspector';
 
 interface DependencyDetailsProps {
     packageId: string | null;
 }
 
 export const DependencyDetails: React.FC<DependencyDetailsProps> = ({ packageId }) => {
-    const [details, setDetails] = useState<PackageDetails | null>(null);
+    const [details, setDetails] = useState<DependencyNode | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -56,12 +57,47 @@ export const DependencyDetails: React.FC<DependencyDetailsProps> = ({ packageId 
 
     return (
         <div className="details-content">
-            <h2>{details.name}@{details.version}</h2>
-            
-            <div className="details-section">
-                <h3>Size</h3>
-                <p>{(details.size / 1024).toFixed(1)} KB</p>
+            <div className="package-header">
+                <h2>{details.name}@{details.version}</h2>
+                <div className="package-badges">
+                    {details.is_dev_dep && <span className="badge dev">Dev</span>}
+                    {details.has_warnings && <span className="badge warning">⚠️ Warnings</span>}
+                </div>
             </div>
+
+            <div className="metrics-summary">
+                <div className="metric">
+                    <label>Build Time</label>
+                    <span>{details.build_metrics.total_time.toFixed(2)}s</span>
+                </div>
+                <div className="metric">
+                    <label>Cache</label>
+                    <span>{details.build_metrics.cache_hits}/{details.build_metrics.cache_hits + details.build_metrics.cache_misses}</span>
+                </div>
+                <div className="metric">
+                    <label>Size</label>
+                    <span>{(details.size / 1024).toFixed(1)} KB</span>
+                </div>
+                <div className="metric">
+                    <label>Files</label>
+                    <span>{details.build_metrics.files_compiled}</span>
+                </div>
+            </div>
+
+            <div className="compiler-config">
+                <h3>Compiler Configuration</h3>
+                {Object.entries(details.compiler_config).map(([key, value]) => (
+                    <div key={key} className="config-item">
+                        <label>{key}</label>
+                        <code>{value}</code>
+                    </div>
+                ))}
+            </div>
+
+            <BuildInspector
+                sourceTree={details.source_tree}
+                includePaths={details.include_paths}
+            />
 
             <div className="details-section">
                 <h3>Dependencies</h3>
@@ -73,13 +109,6 @@ export const DependencyDetails: React.FC<DependencyDetailsProps> = ({ packageId 
                     ))}
                 </ul>
             </div>
-
-            {details.has_warnings && (
-                <div className="details-section warnings">
-                    <h3>⚠️ Warnings</h3>
-                    <p>This package has warnings</p>
-                </div>
-            )}
 
             <div className="details-section">
                 <h3>Last Used</h3>

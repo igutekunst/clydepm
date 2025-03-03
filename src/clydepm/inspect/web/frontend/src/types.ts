@@ -14,6 +14,10 @@ export interface DependencyNode {
     all_deps: string[];
     position: Position;
     last_used: string;
+    source_tree: SourceTree;
+    include_paths: IncludePath[];
+    build_metrics: BuildMetrics;
+    compiler_config: Record<string, string>;
 }
 
 export interface DependencyEdge {
@@ -45,6 +49,65 @@ export interface BuildMetrics {
     memory_usage: number;
     cpu_usage: number;
     timestamp: string;
+    files_compiled: number;
+    total_warnings: number;
+    total_errors: number;
+}
+
+export enum IncludePathType {
+    SYSTEM = "system",
+    PUBLIC = "public",
+    PRIVATE = "private",
+    DEPENDENCY = "dependency"
+}
+
+export interface IncludePath {
+    path: string;
+    type: IncludePathType;
+    from_package: string | null;
+}
+
+export interface CompilerCommand {
+    compiler: string;
+    source_file: string;
+    output_file: string;
+    command_line: string;
+    flags: string[];
+    include_paths: IncludePath[];
+    defines: Record<string, string | null>;
+    timestamp: string;
+    duration_ms: number;
+    cache_hit: boolean;
+    cache_key: string;
+}
+
+export interface BuildWarning {
+    file: string;
+    line: number;
+    column: number;
+    message: string;
+    level: string;
+    flag: string | null;
+}
+
+export interface SourceFile {
+    path: string;
+    type: string;
+    size: number;
+    last_modified: string;
+    compiler_command: CompilerCommand | null;
+    included_by: string[];
+    includes: string[];
+    warnings: BuildWarning[];
+    object_size: number | null;
+}
+
+export interface SourceTree {
+    name: string;
+    path: string;
+    type: string;
+    children: SourceTree[];
+    file_info: SourceFile | null;
 }
 
 export interface GraphSettings {

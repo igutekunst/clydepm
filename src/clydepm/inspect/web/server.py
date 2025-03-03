@@ -14,7 +14,10 @@ from .models import (
     DependencyWarning,
     BuildMetrics,
     GraphLayout,
-    Position
+    Position,
+    SourceTree,
+    IncludePath,
+    IncludePathType
 )
 
 app = FastAPI(
@@ -35,6 +38,60 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def generate_example_source_tree(name: str) -> SourceTree:
+    return SourceTree(
+        name=name,
+        path=f"src/{name}",
+        type="directory",
+        file_info=None,
+        children=[
+            SourceTree(
+                name="include",
+                path=f"src/{name}/include",
+                type="directory",
+                file_info=None,
+                children=[
+                    SourceTree(
+                        name=f"{name}.h",
+                        path=f"src/{name}/include/{name}.h",
+                        type="header",
+                        file_info=None,
+                        children=[]
+                    )
+                ]
+            ),
+            SourceTree(
+                name="src",
+                path=f"src/{name}/src",
+                type="directory",
+                file_info=None,
+                children=[
+                    SourceTree(
+                        name=f"{name}.cpp",
+                        path=f"src/{name}/src/{name}.cpp",
+                        type="source",
+                        file_info=None,
+                        children=[]
+                    )
+                ]
+            )
+        ]
+    )
+
+def generate_example_build_metrics(name: str) -> BuildMetrics:
+    return BuildMetrics(
+        total_time=5.67,
+        cache_hits=10,
+        cache_misses=2,
+        artifact_sizes={f"lib{name}.a": 1024*1024},
+        memory_usage=256.0,
+        cpu_usage=45.6,
+        timestamp=datetime.now(timezone.utc),
+        files_compiled=12,
+        total_warnings=3,
+        total_errors=0
+    )
+
 # Example data
 EXAMPLE_NODES = [
     DependencyNode(
@@ -47,7 +104,14 @@ EXAMPLE_NODES = [
         direct_deps=["fmt", "spdlog"],
         all_deps=["fmt", "spdlog", "catch2"],
         position=Position(x=0.0, y=0.0),
-        last_used=datetime.now(timezone.utc)
+        last_used=datetime.now(timezone.utc),
+        source_tree=generate_example_source_tree("my-app"),
+        include_paths=[
+            IncludePath(path="/usr/include", type=IncludePathType.SYSTEM, from_package=None),
+            IncludePath(path="include", type=IncludePathType.PUBLIC, from_package=None)
+        ],
+        build_metrics=generate_example_build_metrics("my-app"),
+        compiler_config={"CXX": "g++", "CXXFLAGS": "-O2 -Wall"}
     ),
     DependencyNode(
         id="fmt",
@@ -59,7 +123,14 @@ EXAMPLE_NODES = [
         direct_deps=[],
         all_deps=[],
         position=Position(x=-1.0, y=1.0),
-        last_used=datetime.now(timezone.utc)
+        last_used=datetime.now(timezone.utc),
+        source_tree=generate_example_source_tree("fmt"),
+        include_paths=[
+            IncludePath(path="/usr/include", type=IncludePathType.SYSTEM, from_package=None),
+            IncludePath(path="include/fmt", type=IncludePathType.PUBLIC, from_package="fmt")
+        ],
+        build_metrics=generate_example_build_metrics("fmt"),
+        compiler_config={"CXX": "g++", "CXXFLAGS": "-O2"}
     ),
     DependencyNode(
         id="spdlog",
@@ -71,7 +142,15 @@ EXAMPLE_NODES = [
         direct_deps=["fmt"],
         all_deps=["fmt"],
         position=Position(x=1.0, y=1.0),
-        last_used=datetime.now(timezone.utc)
+        last_used=datetime.now(timezone.utc),
+        source_tree=generate_example_source_tree("spdlog"),
+        include_paths=[
+            IncludePath(path="/usr/include", type=IncludePathType.SYSTEM, from_package=None),
+            IncludePath(path="include/spdlog", type=IncludePathType.PUBLIC, from_package="spdlog"),
+            IncludePath(path="fmt/include", type=IncludePathType.DEPENDENCY, from_package="fmt")
+        ],
+        build_metrics=generate_example_build_metrics("spdlog"),
+        compiler_config={"CXX": "g++", "CXXFLAGS": "-O2 -DSPDLOG_FMT_EXTERNAL"}
     ),
     DependencyNode(
         id="catch2",
@@ -83,7 +162,14 @@ EXAMPLE_NODES = [
         direct_deps=[],
         all_deps=[],
         position=Position(x=0.0, y=2.0),
-        last_used=datetime.now(timezone.utc)
+        last_used=datetime.now(timezone.utc),
+        source_tree=generate_example_source_tree("catch2"),
+        include_paths=[
+            IncludePath(path="/usr/include", type=IncludePathType.SYSTEM, from_package=None),
+            IncludePath(path="include", type=IncludePathType.PUBLIC, from_package=None)
+        ],
+        build_metrics=generate_example_build_metrics("catch2"),
+        compiler_config={"CXX": "g++", "CXXFLAGS": "-O2"}
     )
 ]
 
