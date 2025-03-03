@@ -63,51 +63,36 @@ export enum IncludePathType {
 
 export interface IncludePath {
     path: string;
-    type: IncludePathType;
-    from_package: string | null;
+    type: 'system' | 'user' | 'dependency';
+    from_package?: string;
 }
 
 export interface CompilerCommand {
-    compiler: string;
-    source_file: string;
-    output_file: string;
     command_line: string;
-    flags: string[];
-    include_paths: IncludePath[];
-    defines: Record<string, string | null>;
-    timestamp: string;
     duration_ms: number;
     cache_hit: boolean;
-    cache_key: string;
+    flags: string[];
 }
 
 export interface BuildWarning {
-    file: string;
-    line: number;
-    column: number;
+    location: string;
     message: string;
-    level: string;
-    flag: string | null;
 }
 
 export interface SourceFile {
     path: string;
-    type: string;
+    type: 'source' | 'header';
     size: number;
-    last_modified: string;
-    compiler_command: CompilerCommand | null;
-    included_by: string[];
-    includes: string[];
-    warnings: BuildWarning[];
-    object_size: number | null;
+    compiler_command?: CompilerCommand;
+    warnings?: BuildWarning[];
 }
 
 export interface SourceTree {
     name: string;
     path: string;
-    type: string;
-    children: SourceTree[];
-    file_info: SourceFile | null;
+    type: 'directory' | 'source' | 'header';
+    children?: SourceTree[];
+    file_info?: SourceFile;
 }
 
 export interface GraphSettings {

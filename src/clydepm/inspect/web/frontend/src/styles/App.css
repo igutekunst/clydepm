@@ -1,0 +1,39 @@
+.app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: #f5f7fa;
+}
+
+.app-header {
+    background: white;
+    padding: 1rem 2rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    z-index: 10;
+}
+
+.app-header h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: #1a1a1a;
+}
+
+.app-content {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 0;
+    height: calc(100vh - 64px); /* Account for header */
+    overflow: hidden;
+}
+
+.graph-container {
+    position: relative;
+    overflow: hidden;
+    background: #fafafa;
+}
+
+.inspector-container {
+    border-left: 1px solid #e0e0e0;
+    background: white;
+    overflow-y: auto;
+} 

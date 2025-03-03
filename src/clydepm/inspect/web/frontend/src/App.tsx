@@ -8,8 +8,8 @@ import './styles/main.css';
 export function App() {
     const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
 
-    const handleNodeClick = (node: DependencyNode) => {
-        setSelectedPackage(node.id);
+    const handleNodeSelect = (node: DependencyNode | null) => {
+        setSelectedPackage(node?.id || null);
     };
 
     return (
@@ -20,7 +20,7 @@ export function App() {
             
             <main className="app-content">
                 <div className="graph-container">
-                    <DependencyGraph onNodeClick={handleNodeClick} />
+                    <DependencyGraph onNodeSelect={handleNodeSelect} />
                 </div>
                 
                 <aside className="details-panel">

@@ -20,7 +20,11 @@ import { fetchDependencyGraph, fetchGraphSettings } from '../api/client';
 import type { DependencyNode } from '../types';
 
 interface DependencyGraphProps {
-    onNodeClick: (node: DependencyNode) => void;
+    onNodeSelect: (node: DependencyNode | null) => void;
+}
+
+interface FlowProps {
+    onNodeSelect: (node: DependencyNode | null) => void;
 }
 
 const PackageNode: React.FC<NodeProps> = ({ data }) => (
@@ -41,7 +45,7 @@ const nodeTypes = {
     package: PackageNode,
 };
 
-const Flow: React.FC<DependencyGraphProps> = ({ onNodeClick }) => {
+const Flow = React.memo(({ onNodeSelect }: { onNodeSelect: (node: DependencyNode | null) => void }) => {
     const [nodes, setNodes] = useState<Node[]>([]);
     const [edges, setEdges] = useState<Edge[]>([]);
     const [settings, setSettings] = useState<GraphSettings | null>(null);
@@ -56,6 +60,11 @@ const Flow: React.FC<DependencyGraphProps> = ({ onNodeClick }) => {
         setEdges((eds) => applyEdgeChanges(changes, eds));
     }, []);
 
+    const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+        console.log('Node clicked in Flow component:', node.data);
+        onNodeSelect(node.data as DependencyNode);
+    }, [onNodeSelect]);
+
     useEffect(() => {
         const loadGraphData = async () => {
             try {
@@ -64,21 +73,17 @@ const Flow: React.FC<DependencyGraphProps> = ({ onNodeClick }) => {
                     fetchGraphSettings(),
                 ]);
 
-                // Transform nodes with draggable positions
                 const flowNodes = graphData.nodes.map((node) => ({
                     id: node.id,
                     type: 'package',
                     position: {
-                        x: node.position.x * 200,  // Space out nodes more
+                        x: node.position.x * 200,
                         y: node.position.y * 200
                     },
-                    draggable: true,  // Enable dragging
-                    data: {
-                        ...node,
-                    },
+                    draggable: true,
+                    data: node,
                 }));
 
-                // Transform edges
                 const flowEdges = graphData.edges.map((edge) => ({
                     id: edge.id,
                     source: edge.source,
@@ -125,7 +130,7 @@ const Flow: React.FC<DependencyGraphProps> = ({ onNodeClick }) => {
                 nodeTypes={nodeTypes}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
-                onNodeClick={(_, node) => onNodeClick(node.data)}
+                onNodeClick={handleNodeClick}
                 fitView
                 minZoom={settings.zoom.min}
                 maxZoom={settings.zoom.max}
@@ -141,12 +146,18 @@ const Flow: React.FC<DependencyGraphProps> = ({ onNodeClick }) => {
             </ReactFlow>
         </div>
     );
-};
+});
 
-export const DependencyGraph: React.FC<DependencyGraphProps> = (props) => {
+export const DependencyGraph = React.memo(({ onNodeSelect }: DependencyGraphProps) => {
+    console.log('DependencyGraph received onNodeSelect:', typeof onNodeSelect);
+    
+    if (typeof onNodeSelect !== 'function') {
+        console.error('onNodeSelect is not a function:', onNodeSelect);
+    }
+    
     return (
         <ReactFlowProvider>
-            <Flow {...props} />
+            <Flow onNodeSelect={onNodeSelect} />
         </ReactFlowProvider>
     );
-}; 
+}); 
