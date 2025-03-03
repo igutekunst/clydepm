@@ -17,6 +17,12 @@ export const BuildInspector: React.FC<BuildInspectorProps> = ({
     selectedFile,
     onFileSelect,
 }) => {
+    console.log('BuildInspector render:', {
+        hasSourceTree: !!sourceTree,
+        selectedFile,
+        includePathsCount: includePaths?.length
+    });
+
     return (
         <div className="build-inspector">
             <div className="source-panel">

@@ -1,0 +1,80 @@
+.compilation-details {
+    padding: 1rem;
+    overflow-y: auto;
+}
+
+.info-row {
+    display: flex;
+    margin-bottom: 0.5rem;
+    padding: 0.5rem;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+}
+
+.label {
+    font-weight: bold;
+    min-width: 100px;
+    color: #666;
+}
+
+.value {
+    flex: 1;
+}
+
+.command-line {
+    background-color: #2d2d2d;
+    color: #fff;
+    padding: 1rem;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 0.5rem 0;
+    font-family: monospace;
+}
+
+.flags ul {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0;
+}
+
+.flags li {
+    display: inline-block;
+    background-color: #e0e0e0;
+    padding: 0.25rem 0.5rem;
+    margin: 0.25rem;
+    border-radius: 4px;
+    font-family: monospace;
+}
+
+.warning-list {
+    list-style: none;
+    padding: 0;
+}
+
+.warning-item {
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+    border-radius: 4px;
+}
+
+.warning-location {
+    font-family: monospace;
+    color: #856404;
+    margin-bottom: 0.25rem;
+}
+
+.warning-message {
+    color: #333;
+}
+
+h3, h4 {
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    color: #333;
+}
+
+.compiler-info, .warnings {
+    margin-top: 1.5rem;
+} 

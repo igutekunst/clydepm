@@ -1,0 +1,40 @@
+.source-tree-node {
+    cursor: pointer;
+}
+
+.tree-item {
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 4px;
+    margin: 2px 0;
+}
+
+.tree-item:hover {
+    background-color: #f0f0f0;
+}
+
+.tree-item.selected {
+    background-color: #e3f2fd;
+}
+
+.icon {
+    width: 20px;
+    text-align: center;
+}
+
+.name {
+    flex: 1;
+}
+
+.warning-count {
+    padding: 2px 6px;
+    background-color: #fff3cd;
+    border-radius: 12px;
+    font-size: 0.8em;
+}
+
+.children {
+    margin-left: 20px;
+} 

@@ -19,10 +19,30 @@ export const SourceTree: React.FC<SourceTreeProps> = ({
     const handleClick = (e: React.MouseEvent) => {
         e.stopPropagation();
         
+        console.log('Tree node clicked:', {
+            path: tree.path,
+            type: tree.type,
+            hasFileInfo: !!tree.file_info
+        });
+
         if (tree.type === 'directory') {
             setIsExpanded(!isExpanded);
-        } else if (tree.file_info) {
-            onFileSelect(tree.file_info);
+        } else {
+            // For non-directory nodes, always create a SourceFile
+            const fileInfo: SourceFile = tree.file_info || {
+                path: tree.path,
+                type: tree.type as 'source' | 'header',
+                size: 0,
+                warnings: [],
+                compiler_command: {
+                    command_line: `clang++ -c ${tree.path}`,
+                    duration_ms: 0,
+                    cache_hit: false,
+                    flags: ['-Wall', '-Wextra', '-std=c++17']
+                }
+            };
+            console.log('Calling onFileSelect with constructed fileInfo:', fileInfo);
+            onFileSelect(fileInfo);
         }
     };
 
