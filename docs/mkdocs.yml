@@ -1,0 +1,72 @@
+site_name: Clyde Package Manager
+site_description: Modern C/C++ package manager documentation
+repo_url: https://github.com/yourusername/clydepm
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed
+  - pymdownx.tasklist
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+extra_javascript:
+  - https://unpkg.com/mermaid@10.6.1/dist/mermaid.min.js
+  - javascripts/mermaid.js
+
+nav:
+  - Home: index.md
+  - User Guide:
+    - Getting Started: user-guide/getting-started.md
+    - Project Structure: user-guide/project-structure.md
+    - Dependencies: user-guide/dependencies.md
+    - Build System: user-guide/build-system.md
+    - Commands Reference: user-guide/commands.md
+  - Architecture:
+    - Overview: architecture/overview.md
+    - Package Management: architecture/package-management.md
+    - Build System: architecture/build-system.md
+    - Cache System: architecture/cache-system.md
+    - CLI Design: architecture/cli-design.md
+  - Development:
+    - Contributing: development/contributing.md
+    - Roadmap: development/roadmap.md
+    - Design Decisions: development/design-decisions.md
+  - API Reference:
+    - Core: api/core.md
+    - Build: api/build.md
+    - CLI: api/cli.md 
