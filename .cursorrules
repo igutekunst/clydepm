@@ -14,11 +14,48 @@ module_rules:
   core:
     path: src/clydepm/core
     description: "Core package management functionality"
-    responsibilities:
-      - Package definition and metadata
-      - Dependency management
-      - Version handling
-      - Configuration management
+    submodules:
+      package:
+        path: package.py
+        responsibilities:
+          - Package class definition
+          - Metadata handling
+          - Package operations
+        max_lines: 300
+        
+      version:
+        path: version/
+        responsibilities:
+          - Version parsing and comparison
+          - Version range handling
+          - Version resolution
+          - Compatibility checking
+        files:
+          - version.py: "Version class and parsing"
+          - ranges.py: "Version range handling"
+          - resolver.py: "Version resolution logic"
+          
+      dependency:
+        path: dependency/
+        responsibilities:
+          - Dependency graph representation
+          - Resolution algorithms
+          - Conflict detection
+          - Build order generation
+        files:
+          - graph.py: "Dependency graph implementation"
+          - resolver.py: "Resolution algorithms"
+          - conflicts.py: "Conflict handling"
+          
+      config:
+        path: config/
+        responsibilities:
+          - Configuration schema definitions
+          - Config file handling
+          - Default configurations
+        files:
+          - schema.py: "Config schema definitions"
+          - loader.py: "Config file loading"
     
   build:
     path: src/clydepm/build
@@ -60,6 +97,20 @@ allowed_dependencies:
     - core
   github:
     - core
+  core.dependency:
+    - core.version
+  core.package:
+    - core.version
+    - core.dependency
+    - core.config
+
+# File Size Rules
+max_file_sizes:
+  default: 500  # lines
+  overrides:
+    "core/package.py": 300
+    "build/builder.py": 400
+    "cli/app.py": 200
 
 # Naming Conventions
 naming:
@@ -102,6 +153,31 @@ llm_instructions:
   - "Keep dependencies unidirectional"
   - "Add docstrings and type hints"
   - "Update relevant documentation when changing code"
+  - "Suggest breaking apart large files when they get too long"
+  - "Suggest refactoring code to improve readability and maintainability"
+  - "Don't make assumptions about the codebase, ask questions instead"
+  - "Don't make large changes without discussing them first"
   - "Follow existing patterns in the codebase"
   - "Consider future extensibility"
-  - "Ensure changes align with roadmap" 
+  - "Ensure changes align with roadmap"
+  - "Suggest updating .cursorrules when making changes"
+
+# Module-Specific Rules
+module_specific_rules:
+  core.version:
+    - "Use semantic versioning (SemVer) for all version handling"
+    - "Implement strict version parsing"
+    - "Support version ranges and constraints"
+    - "Cache version parsing results"
+    
+  core.dependency:
+    - "Use efficient graph algorithms"
+    - "Implement cycle detection"
+    - "Handle diamond dependencies"
+    - "Support override resolution"
+    
+  core.config:
+    - "Validate all config files against schemas"
+    - "Support environment variables"
+    - "Handle config inheritance"
+    - "Cache parsed configs"

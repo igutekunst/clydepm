@@ -6,28 +6,57 @@ This document describes the organization of the Clyde codebase.
 
 ```
 src/clydepm/
-├── core/           # Core package management functionality
-│   └── package.py  # Package class and core types
-├── build/          # Build system implementation
-│   ├── builder.py  # Build orchestration
-│   └── cache.py    # Build artifact caching
-├── cli/            # Command-line interface
-│   ├── app.py      # Main CLI application
-│   ├── commands/   # Individual command implementations
-│   ├── models/     # CLI-specific data models
-│   └── utils/      # CLI utilities
-├── github/         # GitHub integration
-└── templates/      # Project templates
+├── core/                # Core package management functionality
+│   ├── package.py      # Package class and core types
+│   ├── version/        # Version management
+│   │   ├── version.py  # Version parsing and comparison
+│   │   ├── ranges.py   # Version range handling
+│   │   └── resolver.py # Version resolution
+│   ├── dependency/     # Dependency management
+│   │   ├── graph.py    # Dependency graph
+│   │   ├── resolver.py # Resolution algorithms
+│   │   └── conflicts.py# Conflict handling
+│   └── config/         # Configuration management
+│       ├── schema.py   # Config schemas
+│       └── loader.py   # Config loading
+├── build/              # Build system implementation
+│   ├── builder.py      # Build orchestration
+│   └── cache.py        # Build artifact caching
+├── cli/                # Command-line interface
+│   ├── app.py          # Main CLI application
+│   ├── commands/       # Individual command implementations
+│   ├── models/         # CLI-specific data models
+│   └── utils/          # CLI utilities
+├── github/             # GitHub integration
+└── templates/          # Project templates
 ```
 
 ## Component Overview
 
 ### Core (`core/`)
 The core package contains fundamental package management functionality:
-- Package definition and metadata
-- Dependency management
-- Version handling
-- Configuration management
+
+1. **Package Management** (`package.py`)
+   - Package class definition
+   - Metadata handling
+   - Package operations
+
+2. **Version Management** (`version/`)
+   - Semantic version parsing
+   - Version range handling
+   - Version resolution
+   - Compatibility checking
+
+3. **Dependency Management** (`dependency/`)
+   - Dependency graph representation
+   - Resolution algorithms
+   - Conflict detection and resolution
+   - Build order generation
+
+4. **Configuration Management** (`config/`)
+   - Configuration schema definitions
+   - Config file loading and validation
+   - Default configurations
 
 ### Build System (`build/`)
 Handles all aspects of building packages:
@@ -59,9 +88,10 @@ Project templates and scaffolding:
 ## Code Organization Principles
 
 1. **Separation of Concerns**
-   - Core logic is independent of UI/CLI
-   - Build system is modular and extensible
-   - Clear boundaries between components
+   - Core logic is split into focused submodules
+   - Each submodule has a single responsibility
+   - Clear interfaces between components
+   - Minimal coupling between modules
 
 2. **Dependency Flow**
    ```mermaid
@@ -70,10 +100,20 @@ Project templates and scaffolding:
        CLI --> Build
        Build --> Core
        GitHub --> Core
+       
+       subgraph Core
+           Package --> Version
+           Package --> Dependency
+           Package --> Config
+           Dependency --> Version
+       end
    ```
 
 3. **Module Responsibilities**
-   - `core`: Data models and business logic
+   - `core/package.py`: Central package representation
+   - `core/version/`: Version handling and resolution
+   - `core/dependency/`: Dependency graph and resolution
+   - `core/config/`: Configuration management
    - `build`: Build process and caching
    - `cli`: User interaction
    - `github`: External service integration
@@ -113,10 +153,10 @@ As new features are added, the following organization changes are anticipated:
 ## Development Guidelines
 
 1. **Module Placement**
-   - New features should follow existing organization
-   - Core functionality belongs in `core/`
-   - UI/UX features belong in `cli/`
-   - Build features belong in `build/`
+   - Version-related code goes in `core/version/`
+   - Dependency resolution in `core/dependency/`
+   - Configuration handling in `core/config/`
+   - Keep `package.py` focused on package representation
 
 2. **Dependencies**
    - Avoid circular dependencies
