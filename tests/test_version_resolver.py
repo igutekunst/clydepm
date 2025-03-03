@@ -57,8 +57,16 @@ def test_find_all_compatible():
     result = VersionResolver.find_all_compatible(available_versions, constraints)
     assert result == [Version.parse("1.2.0")]
     
-    # Test version range
+    # Test version range - prereleases excluded by default
     constraints = VersionRange.parse(">=1.2.0 <2.0.0")
+    result = VersionResolver.find_all_compatible(available_versions, constraints)
+    assert result == [
+        Version.parse("1.2.1"),
+        Version.parse("1.2.0"),
+    ]
+    
+    # Test version range with explicit prerelease
+    constraints = VersionRange.parse(">=1.2.0-0 <2.0.0")
     result = VersionResolver.find_all_compatible(available_versions, constraints)
     assert result == [
         Version.parse("1.2.1"),

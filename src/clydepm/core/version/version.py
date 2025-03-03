@@ -201,3 +201,12 @@ class Version:
             True if versions are compatible
         """
         return self.major == other.major 
+
+    def without_prerelease(self) -> "Version":
+        """Return a new version without the prerelease component."""
+        return Version(
+            major=self.major,
+            minor=self.minor,
+            patch=self.patch,
+            build=self.build
+        ) 
