@@ -1,126 +1,90 @@
-import { useEffect, useState } from 'react';
-import { getPackageDetails } from '@/api/client';
-import type { DependencyNode, DependencyWarning } from '@/api/client';
+import React, { useEffect, useState } from 'react';
+import { fetchPackageDetails } from '../api/client';
+import type { PackageDetails } from '../types';
 
 interface DependencyDetailsProps {
-  packageId: string | null;
+    packageId: string | null;
 }
 
-const formatBytes = (bytes: number): string => {
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let size = bytes;
-  let unitIndex = 0;
-
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex++;
-  }
-
-  return `${size.toFixed(1)} ${units[unitIndex]}`;
-};
-
-const formatDate = (dateStr: string): string => {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
 export const DependencyDetails: React.FC<DependencyDetailsProps> = ({ packageId }) => {
-  const [details, setDetails] = useState<DependencyNode | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+    const [details, setDetails] = useState<PackageDetails | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+    useEffect(() => {
+        if (!packageId) {
+            setDetails(null);
+            return;
+        }
+
+        const loadDetails = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+                const data = await fetchPackageDetails(packageId);
+                setDetails(data);
+            } catch (err) {
+                setError('Failed to load package details');
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadDetails();
+    }, [packageId]);
+
     if (!packageId) {
-      setDetails(null);
-      return;
+        return (
+            <div className="details-empty">
+                <p>Select a package to view details</p>
+            </div>
+        );
     }
 
-    const fetchDetails = async () => {
-      try {
-        setLoading(true);
-        const data = await getPackageDetails(packageId);
-        setDetails(data);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load package details');
-        setDetails(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (loading) {
+        return <div className="details-loading">Loading...</div>;
+    }
 
-    fetchDetails();
-  }, [packageId]);
+    if (error) {
+        return <div className="details-error">{error}</div>;
+    }
 
-  if (!packageId) {
-    return <div>Select a package to view details</div>;
-  }
+    if (!details) {
+        return null;
+    }
 
-  if (loading) {
-    return <div>Loading package details...</div>;
-  }
+    return (
+        <div className="details-content">
+            <h2>{details.name}@{details.version}</h2>
+            
+            <div className="details-section">
+                <h3>Size</h3>
+                <p>{(details.size / 1024).toFixed(1)} KB</p>
+            </div>
 
-  if (error) {
-    return <div>Error: {error}</div>;
-  }
+            <div className="details-section">
+                <h3>Dependencies</h3>
+                <p>Direct: {details.direct_deps.length}</p>
+                <p>Total: {details.all_deps.length}</p>
+                <ul>
+                    {details.direct_deps.map(dep => (
+                        <li key={dep}>{dep}</li>
+                    ))}
+                </ul>
+            </div>
 
-  if (!details) {
-    return null;
-  }
+            {details.has_warnings && (
+                <div className="details-section warnings">
+                    <h3>⚠️ Warnings</h3>
+                    <p>This package has warnings</p>
+                </div>
+            )}
 
-  return (
-    <div className="dependency-details">
-      <h2>
-        {details.name}@{details.version}
-        {details.is_dev_dep && <span className="dev-badge">dev</span>}
-      </h2>
-
-      <div className="metrics">
-        <div className="metric">
-          <label>Size</label>
-          <span className="value">{formatBytes(details.size)}</span>
+            <div className="details-section">
+                <h3>Last Used</h3>
+                <p>{new Date(details.last_used).toLocaleString()}</p>
+            </div>
         </div>
-        <div className="metric">
-          <label>Direct Dependencies</label>
-          <span className="value">{details.direct_deps.length}</span>
-        </div>
-        <div className="metric">
-          <label>Total Dependencies</label>
-          <span className="value">{details.all_deps.length}</span>
-        </div>
-        <div className="metric">
-          <label>Last Used</label>
-          <span className="value">{formatDate(details.last_used)}</span>
-        </div>
-      </div>
-
-      {details.has_warnings && (
-        <div className="warnings">
-          <h3>⚠️ Warnings</h3>
-          <ul>
-            {details.warnings?.map((warning: DependencyWarning) => (
-              <li key={warning.id} className={`warning-${warning.level}`}>
-                {warning.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="dependencies">
-        <h3>Direct Dependencies</h3>
-        <ul>
-          {details.direct_deps.map((dep) => (
-            <li key={dep}>{dep}</li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
+    );
 }; 

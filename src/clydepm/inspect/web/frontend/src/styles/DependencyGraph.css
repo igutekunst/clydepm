@@ -1,0 +1,80 @@
+.package-node {
+    padding: 15px;
+    border-radius: 8px;
+    background: white;
+    border: 2px solid #ddd;
+    width: 180px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+.package-node:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transform: translateY(-2px);
+}
+
+.package-node.dev-dep {
+    background: #f8f9fa;
+    border-style: dashed;
+}
+
+.package-node.has-warnings {
+    border-color: #ffc107;
+}
+
+.package-header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.package-name {
+    font-weight: 600;
+    font-size: 1.1em;
+    color: #2c3e50;
+}
+
+.package-version {
+    font-size: 0.9em;
+    color: #666;
+}
+
+.warning-indicator {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: white;
+    border-radius: 50%;
+    padding: 2px;
+    border: 2px solid #ffc107;
+}
+
+.react-flow__handle {
+    width: 8px;
+    height: 8px;
+    background: #888;
+}
+
+.react-flow__handle:hover {
+    background: #555;
+}
+
+.react-flow__edge-path {
+    stroke-width: 2;
+}
+
+.react-flow__controls {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+}
+
+.react-flow__controls button {
+    border-radius: 4px;
+    background: white;
+    border: 1px solid #ddd;
+    color: #666;
+}
+
+.react-flow__controls button:hover {
+    background: #f8f9fa;
+} 

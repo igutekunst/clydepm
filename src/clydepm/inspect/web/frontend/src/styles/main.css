@@ -26,9 +26,9 @@ body {
 }
 
 .app-header {
-  background-color: var(--surface-color);
-  border-bottom: 1px solid var(--border-color);
+  background: #f8f9fa;
   padding: 1rem 2rem;
+  border-bottom: 1px solid #dee2e6;
 }
 
 .app-header h1 {
