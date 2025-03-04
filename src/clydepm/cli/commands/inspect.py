@@ -2,7 +2,7 @@
 Inspect command for Clydepm.
 """
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 import sys
 import subprocess
 import os
@@ -16,6 +16,9 @@ from rich import print as rprint
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
+from ...core.package import Package
+from ...core.dependency.resolver import DependencyResolver
+
 # Create console for rich output
 console = Console()
 
@@ -25,6 +28,9 @@ class OutputFormat(str, Enum):
     CONSOLE = "console"
     JSON = "json"
     HTML = "html"
+    PNG = "png"
+    SVG = "svg"
+    PDF = "pdf"
 
 
 def analyze(
@@ -147,9 +153,74 @@ def serve(
                 sys.exit(1)
 
 
+def graph(
+    output: Optional[Path] = typer.Option(
+        None,
+        help="Output file path. If not provided, opens the graph in the default viewer."
+    ),
+    format: OutputFormat = typer.Option(
+        OutputFormat.PNG,
+        help="Output format for the graph visualization"
+    )
+) -> None:
+    """Visualize package dependencies."""
+    try:
+        # Load current package
+        try:
+            package = Package(Path.cwd())
+        except FileNotFoundError:
+            console.print("[red]Error:[/red] No package.yml found in current directory")
+            raise typer.Exit(1)
+            
+        # Create dependency resolver
+        resolver = DependencyResolver()
+        
+        # Add package and its dependencies
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("Resolving dependencies...", total=None)
+            resolver.add_package(package)
+            progress.update(task, completed=True)
+            
+            # Check for cycles
+            cycles = resolver.detect_cycles()
+            if cycles:
+                cycle_str = " -> ".join(cycles[0])
+                console.print(f"[yellow]Warning:[/yellow] Circular dependency detected: {cycle_str}")
+            
+            # Generate visualization
+            task = progress.add_task("Generating graph...", total=None)
+            try:
+                if output:
+                    # Save to file
+                    resolver.visualize_graph(output_path=output, format=format.value)
+                    progress.update(task, completed=True)
+                    console.print(f"[green]✓[/green] Graph saved to {output}")
+                else:
+                    # Open in viewer
+                    resolver.view_graph()
+                    progress.update(task, completed=True)
+                    console.print("[green]✓[/green] Opening graph in default viewer...")
+            except RuntimeError as e:
+                console.print(f"[red]Error:[/red] {str(e)}")
+                console.print("Please install Graphviz to generate dependency graphs:")
+                console.print("  macOS: brew install graphviz")
+                console.print("  Linux: sudo apt-get install graphviz")
+                console.print("  Windows: choco install graphviz")
+                raise typer.Exit(1)
+            
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        raise typer.Exit(1)
+
+
 # Create Typer app for inspect commands
 app = typer.Typer(help="Build inspection tools")
 
 # Register commands directly on the inspect app
 app.command()(analyze)
-app.command()(serve) 
+app.command()(serve)
+app.command()(graph) 

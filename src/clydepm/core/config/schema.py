@@ -1,5 +1,5 @@
 from typing import Dict, List, Optional, Union
-from pydantic import BaseModel, Field, constr, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from ..version.version import Version
 
 class CompilerFlags(BaseModel):
@@ -8,10 +8,12 @@ class CompilerFlags(BaseModel):
     gxx: Optional[str] = None
     clang: Optional[str] = None
     clangxx: Optional[str] = None
+    
+    model_config = ConfigDict(extra="forbid")
 
 class PackageConfig(BaseModel):
     """Package configuration schema."""
-    name: constr(pattern=r'^(?:@[a-zA-Z0-9_-]+/)?[a-zA-Z0-9_-]+$')
+    name: str = Field(pattern=r'^(?:@[a-zA-Z0-9_-]+/)?[a-zA-Z0-9_-]+$')
     version: str
     type: str = Field(default="library", pattern="^(library|application|foreign)$")
     language: str = Field(pattern="^(c|cpp|cxx|c\\+\\+)$")
@@ -21,9 +23,12 @@ class PackageConfig(BaseModel):
     dev_requires: Dict[str, str] = Field(default_factory=dict)
     traits: Dict[str, str] = Field(default_factory=dict)
     variants: Dict[str, Dict[str, Union[str, Dict[str, str]]]] = Field(default_factory=dict)
+    
+    model_config = ConfigDict(extra="forbid")
 
-    @validator('version')
-    def validate_version(cls, v):
+    @field_validator('version')
+    @classmethod
+    def validate_version(cls, v: str) -> str:
         """Validate version is proper SemVer."""
         try:
             Version.parse(v)
@@ -31,8 +36,9 @@ class PackageConfig(BaseModel):
         except ValueError as e:
             raise ValueError(f"Invalid version format: {e}")
 
-    @validator('requires', 'dev_requires')
-    def validate_dependencies(cls, v):
+    @field_validator('requires', 'dev_requires')
+    @classmethod
+    def validate_dependencies(cls, v: Dict[str, str]) -> Dict[str, str]:
         """Validate dependency specifications."""
         for name, spec in v.items():
             if not name:
@@ -54,7 +60,4 @@ class PackageConfig(BaseModel):
                     raise ValueError(f"Invalid version spec for {name}: {e}")
             else:
                 raise ValueError(f"Invalid dependency specification for {name}: {spec}")
-        return v
-
-    class Config:
-        extra = "forbid"  # Forbid extra fields not in schema 
+        return v 

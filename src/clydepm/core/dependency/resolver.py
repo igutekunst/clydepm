@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set
 import json
 from pathlib import Path
+import subprocess
+import tempfile
 
 from ..package import Package
 from ..version import Version, VersionRange, VersionResolver
@@ -162,3 +164,93 @@ class DependencyResolver:
                 json.dump(graph, f, indent=2)
                 
         return graph 
+
+    def visualize_graph(self, output_path: Optional[Path] = None, format: str = "png") -> Optional[Path]:
+        """Visualize dependency graph using Graphviz.
+        
+        Args:
+            output_path: Optional path to save the visualization
+            format: Output format (png, svg, pdf)
+            
+        Returns:
+            Path to the generated visualization file if output_path is provided
+        """
+        try:
+            # Check if graphviz is installed
+            subprocess.run(["dot", "-V"], capture_output=True, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            raise RuntimeError("Graphviz is not installed. Please install it to generate visualizations.")
+            
+        # Create DOT file content
+        dot_content = ["digraph G {"]
+        dot_content.append("  rankdir=LR;")  # Left to right layout
+        dot_content.append("  node [shape=box, style=rounded];")
+        
+        # Add nodes
+        for name, node in self.nodes.items():
+            # Extract organization if present
+            org = None
+            if name.startswith("@"):
+                org = name.split("/")[0][1:]
+                
+            # Set node color based on package type
+            color = {
+                "library": "lightblue",
+                "application": "lightgreen",
+                "foreign": "lightgrey"
+            }.get(node.package.package_type.value, "white")
+            
+            # Create label with package info
+            label = f"{name}\\n{node.package.version}"
+            
+            # Add node with styling
+            dot_content.append(f'  "{name}" [label="{label}", fillcolor="{color}", style="rounded,filled"'
+                             f'{f", tooltip=\"Organization: {org}\"" if org else ""}'
+                             "];")
+            
+        # Add edges
+        for name, node in self.nodes.items():
+            for dep in node.dependencies:
+                dot_content.append(f'  "{name}" -> "{dep}";')
+                
+        dot_content.append("}")
+        
+        # Create temporary DOT file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".dot", delete=False) as dot_file:
+            dot_file.write("\n".join(dot_content))
+            dot_path = Path(dot_file.name)
+            
+        try:
+            # Generate output file
+            if output_path is None:
+                output_path = dot_path.with_suffix(f".{format}")
+                
+            subprocess.run(
+                ["dot", "-T" + format, str(dot_path), "-o", str(output_path)],
+                check=True,
+                capture_output=True
+            )
+            
+            return output_path
+            
+        finally:
+            # Clean up temporary file
+            dot_path.unlink()
+            
+    def view_graph(self) -> None:
+        """Open the dependency graph visualization in the default viewer."""
+        # Generate visualization in a temporary file
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+            
+        try:
+            # Generate the graph
+            self.visualize_graph(output_path=tmp_path)
+            
+            # Open with default viewer
+            if subprocess.run(["open", str(tmp_path)]).returncode != 0:
+                # Fallback for non-macOS systems
+                subprocess.run(["xdg-open", str(tmp_path)])
+        finally:
+            # Clean up temporary file
+            tmp_path.unlink() 
