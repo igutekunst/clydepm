@@ -13,15 +13,16 @@ from enum import Enum, auto
 from ..core.package import Package, PackageType, CompilerInfo, BuildMetadata
 from .cache import BuildCache
 
-logger = logging.getLogger(__name__)
+# Set up build log file handler
+logger = logging.getLogger("build")
+logger.setLevel(logging.DEBUG)  # Always log everything to file
+logger.propagate = False  # Don't propagate to root logger
 
-# Set up build log file handler - only log to file by default
-build_logger = logging.getLogger("build")
-build_logger.setLevel(logging.DEBUG)  # Always log everything to file
-build_logger.propagate = False  # Prevent propagation to root logger
-build_file_handler = logging.FileHandler("build.log", mode='w')
-build_file_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
-build_logger.addHandler(build_file_handler)
+# File handler for build.log
+file_handler = logging.FileHandler("build.log", mode='w')
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+file_handler.setLevel(logging.DEBUG)
+logger.addHandler(file_handler)
 
 class BuildStage(Enum):
     """Build stages for hooks."""
@@ -188,7 +189,7 @@ class Builder:
         context.command = cmd
         
         # Log the compilation command
-        build_logger.debug("[COMPILE] %s", " ".join(cmd))
+        logger.debug("[COMPILE] %s", " ".join(cmd))
         
         if verbose:
             logger.info("Compiling %s -> %s", rel_source, object_path)
@@ -205,7 +206,7 @@ class Builder:
             
             # Log compiler output if any
             if result.stdout:
-                build_logger.debug("[COMPILER OUTPUT]\n%s", result.stdout)
+                logger.debug("[COMPILER OUTPUT]\n%s", result.stdout)
             
             # Cache the successful compilation
             self.cache.cache_object(source_path, object_path, build_metadata)
@@ -216,7 +217,7 @@ class Builder:
             return None
         except subprocess.CalledProcessError as e:
             error_msg = f"Compilation failed:\n{e.stderr}"
-            build_logger.error("[COMPILE ERROR] %s", error_msg)
+            logger.error("[COMPILE ERROR] %s", error_msg)
             return error_msg
             
     def _link_objects(
@@ -262,7 +263,7 @@ class Builder:
             context.command = cmd
             
             # Log the library creation command
-            build_logger.debug("[ARCHIVE] %s", " ".join(cmd))
+            logger.debug("[ARCHIVE] %s", " ".join(cmd))
             
             if verbose:
                 logger.info("Creating library %s", output_path)
@@ -279,7 +280,7 @@ class Builder:
                 
                 # Log archiver output if any
                 if result.stdout:
-                    build_logger.info("[ARCHIVER OUTPUT]\n%s", result.stdout)
+                    logger.info("[ARCHIVER OUTPUT]\n%s", result.stdout)
                     
                 # Run post-link hooks
                 self.hook_manager.run_hooks(BuildStage.POST_LINK, context)
@@ -287,7 +288,7 @@ class Builder:
                 return None
             except subprocess.CalledProcessError as e:
                 error_msg = f"Library creation failed:\n{e.stderr}"
-                build_logger.error("[ARCHIVE ERROR] %s", error_msg)
+                logger.error("[ARCHIVE ERROR] %s", error_msg)
                 return error_msg
         else:
             # Build command - use g++ for linking C++ code
@@ -311,7 +312,7 @@ class Builder:
             context.command = cmd
             
             # Log the linking command
-            build_logger.debug("[LINK] %s", " ".join(cmd))
+            logger.debug("[LINK] %s", " ".join(cmd))
             
             if verbose:
                 logger.info("Linking %s", output_path)
@@ -328,7 +329,7 @@ class Builder:
                 
                 # Log linker output if any
                 if result.stdout:
-                    build_logger.debug("[LINKER OUTPUT]\n%s", result.stdout)
+                    logger.debug("[LINKER OUTPUT]\n%s", result.stdout)
                     
                 # Run post-link hooks
                 self.hook_manager.run_hooks(BuildStage.POST_LINK, context)
@@ -336,7 +337,7 @@ class Builder:
                 return None
             except subprocess.CalledProcessError as e:
                 error_msg = f"Linking failed:\n{e.stderr}"
-                build_logger.error("[LINK ERROR] %s", error_msg)
+                logger.error("[LINK ERROR] %s", error_msg)
                 return error_msg
 
     def _build_dependencies(
@@ -352,11 +353,11 @@ class Builder:
         """
         # Build all dependencies (both local and remote)
         for dep in package.get_all_dependencies():
-            build_logger.debug("[DEPENDENCY] Building %s %s", dep.name, dep.version)
+            logger.debug("[DEPENDENCY] Building %s %s", dep.name, dep.version)
             result = self.build(dep, traits, verbose)
             if not result.success:
                 error_msg = f"Failed to build dependency {dep.name}: {result.error}"
-                build_logger.error("[DEPENDENCY ERROR] %s", error_msg)
+                logger.error("[DEPENDENCY ERROR] %s", error_msg)
                 return error_msg
         return None
 

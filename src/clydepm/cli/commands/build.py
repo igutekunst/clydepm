@@ -4,12 +4,14 @@ Build command for Clydepm.
 from pathlib import Path
 from typing import Optional, List, Dict
 import sys
+import logging
 
 import typer
 from rich import print as rprint
 from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.logging import RichHandler
 
 from ...core.package import Package
 from ...build.builder import Builder
@@ -32,14 +34,34 @@ def build(
         "--trait", "-t",
         help="Build traits in key=value format",
     ),
-    verbose: bool = typer.Option(
-        False,
+    verbose: int = typer.Option(
+        0,
         "--verbose", "-v",
-        help="Show compiler commands",
+        count=True,
+        help="Verbosity level (-v for basic output, -vv for full debug output)",
     ),
 ) -> None:
     """Build a package."""
     try:
+        # Configure console logging based on verbosity
+        if verbose > 1:
+            log_level = logging.DEBUG
+        elif verbose > 0:
+            log_level = logging.INFO
+        else:
+            log_level = logging.WARNING
+
+        # Set up console handler for build logger
+        build_logger = logging.getLogger("build")
+        console_handler = RichHandler(
+            console=console,
+            show_time=verbose > 1,
+            show_path=False,
+            level=log_level,
+        )
+        console_handler.setFormatter(logging.Formatter("%(message)s"))
+        build_logger.addHandler(console_handler)
+
         # Parse traits
         trait_dict = {}
         if traits:
@@ -47,10 +69,6 @@ def build(
                 key, value = trait.split("=", 1)
                 trait_dict[key.strip()] = value.strip()
                 
-        # Add verbose trait if specified
-        if verbose:
-            trait_dict["verbose"] = "true"
-        
         # Create package and builder
         package = Package(path)
         builder = Builder()
@@ -59,6 +77,7 @@ def build(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
+            disable=verbose > 0  # Disable progress bar in verbose mode
         ) as progress:
             # Show build progress
             task = progress.add_task(
@@ -66,18 +85,19 @@ def build(
                 total=None
             )
             
-            result = builder.build(package, trait_dict)
+            result = builder.build(package, trait_dict, verbose > 0)
             
             if result.success:
                 progress.update(task, completed=True)
-                rprint(f"[green]✓[/green] Built {package.name} {package.version}")
-                
-                # Show artifacts
-                if result.artifacts:
-                    table = Table("Type", "Path")
-                    for type_, path in result.artifacts.items():
-                        table.add_row(type_, str(path))
-                    console.print(table)
+                if verbose == 0:  # Only show success message in non-verbose mode
+                    rprint(f"[green]✓[/green] Built {package.name} {package.version}")
+                    
+                    # Show artifacts
+                    if result.artifacts:
+                        table = Table("Type", "Path")
+                        for type_, path in result.artifacts.items():
+                            table.add_row(type_, str(path))
+                        console.print(table)
             else:
                 progress.update(task, completed=True)
                 rprint(f"[red]Error:[/red] Build failed")
@@ -87,4 +107,8 @@ def build(
                 
     except Exception as e:
         rprint(f"[red]Error:[/red] {str(e)}")
-        sys.exit(1) 
+        sys.exit(1)
+    finally:
+        # Clean up the console handler
+        if 'build_logger' in locals():
+            build_logger.removeHandler(console_handler) 
