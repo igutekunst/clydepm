@@ -4,11 +4,39 @@
     display: flex;
 }
 
+.sidebar {
+    width: 300px;
+    flex-shrink: 0;
+}
+
 .main-content {
     flex: 1;
-    margin-left: 300px; /* Match sidebar width */
-    min-height: 100vh;
+    padding: 20px;
+    margin-left: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.graph-section {
+    flex: 1;
+    min-height: 400px;
     background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+}
+
+.details-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+@media (max-width: 1200px) {
+    .details-section {
+        grid-template-columns: 1fr;
+    }
 }
 
 .app-header {

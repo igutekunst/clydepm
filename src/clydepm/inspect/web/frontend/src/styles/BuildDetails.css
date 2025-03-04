@@ -1,9 +1,32 @@
 .build-details {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
     padding: 20px;
     background: #fff;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     margin-bottom: 20px;
+    height: 100%;
+    overflow: hidden;
+    min-width: 600px;
+    max-width: 900px;
+    width: 100%;
+}
+
+.build-info {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 15px;
+}
+
+.build-inspector-container {
+    flex: 1;
+    min-height: 0;
+    border-top: 1px solid #e0e0e0;
+    padding-top: 20px;
+    margin-top: 10px;
 }
 
 .build-header {
@@ -81,11 +104,22 @@
 }
 
 .compilation-step {
-    margin-bottom: 20px;
+    margin-bottom: 15px;
     padding: 15px;
-    border-radius: 4px;
+    border-radius: 6px;
     border: 1px solid #e0e0e0;
     background: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.compilation-step:hover {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.compilation-step.selected {
+    border-color: #1a73e8;
+    box-shadow: 0 0 0 1px #1a73e8;
 }
 
 .compilation-step.success {
@@ -99,14 +133,16 @@
 .step-header {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 10px;
-    padding-bottom: 10px;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
     border-bottom: 1px solid #eee;
+    gap: 40px;
 }
 
 .step-files {
     font-family: monospace;
-    font-size: 0.9em;
+    font-size: 0.95em;
+    flex: 1;
 }
 
 .step-timing {
@@ -115,53 +151,50 @@
 }
 
 .step-error {
-    margin: 10px 0;
-    padding: 10px;
-    background: #fce8e6;
     color: #c5221f;
+    background: #fce8e6;
+    padding: 8px;
     border-radius: 4px;
-    font-family: monospace;
-    white-space: pre-wrap;
+    margin-top: 10px;
+}
+
+.step-details {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
 }
 
 .step-command {
-    margin: 10px 0;
-    padding: 10px;
-    background: #f8f9fa;
+    margin-bottom: 15px;
+}
+
+.step-command pre {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 12px;
     border-radius: 4px;
     overflow-x: auto;
+    margin: 8px 0;
 }
 
 .step-command code {
     font-family: monospace;
     font-size: 0.9em;
-    white-space: pre-wrap;
-}
-
-.step-includes {
-    margin-top: 10px;
-    padding: 10px;
-    background: #f8f9fa;
-    border-radius: 4px;
-}
-
-.step-includes h4 {
-    margin: 0 0 8px 0;
-    font-size: 0.9em;
-    color: #666;
 }
 
 .step-includes ul {
     list-style: none;
     padding: 0;
-    margin: 0;
+    margin: 8px 0;
 }
 
 .step-includes li {
+    padding: 6px 10px;
+    background: #f5f5f5;
+    margin: 4px 0;
+    border-radius: 4px;
     font-family: monospace;
     font-size: 0.9em;
-    padding: 2px 0;
-    color: #444;
 }
 
 .build-error {
@@ -169,6 +202,7 @@
     padding: 15px;
     background: #fce8e6;
     border-radius: 4px;
+    border-left: 4px solid #c5221f;
 }
 
 .build-error pre {
@@ -178,7 +212,7 @@
     border-radius: 4px;
     overflow-x: auto;
     font-family: monospace;
-    white-space: pre-wrap;
+    font-size: 0.9em;
 }
 
 h2, h3, h4 {
@@ -199,4 +233,23 @@ h4 {
     margin-bottom: 10px;
     font-size: 1em;
     color: #666;
+}
+
+/* Custom scrollbar for webkit browsers */
+.build-info::-webkit-scrollbar {
+    width: 8px;
+}
+
+.build-info::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.build-info::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.build-info::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
 } 

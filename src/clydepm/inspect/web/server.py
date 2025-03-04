@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 from datetime import datetime, timezone
 import json
 import glob
+import os
 
 from .models import (
     DependencyNode,
@@ -247,10 +248,85 @@ async def get_graph_settings() -> Dict:
 async def get_dependency_graph() -> GraphLayout:
     """Get the full dependency graph data."""
     try:
+        # Get the latest build data
+        build_files = glob.glob(str(BUILD_DATA_DIR / "build_*.json"))
+        if not build_files:
+            return GraphLayout(nodes=[], edges=[], warnings=[])
+            
+        # Sort by modification time to get latest
+        latest_build = max(build_files, key=os.path.getmtime)
+        with open(latest_build) as f:
+            build_data = json.load(f)
+            
+        # Transform build data into graph nodes and edges
+        nodes: List[DependencyNode] = []
+        edges: List[DependencyEdge] = []
+        warnings: List[DependencyWarning] = []
+        
+        # Add root package node
+        root_pkg = build_data["package"]["name"]
+        nodes.append(DependencyNode(
+            id=root_pkg,
+            name=root_pkg,
+            version=build_data["package"]["version"],
+            is_dev_dep=False,
+            has_warnings=False,
+            size=0,  # TODO: Calculate actual size
+            direct_deps=list(build_data.get("dependencies", {}).keys()),
+            all_deps=list(build_data.get("dependency_graph", {}).get(root_pkg, [])),
+            position=Position(x=0.0, y=0.0),
+            last_used=datetime.now(timezone.utc),
+            source_tree=generate_example_source_tree(root_pkg),  # TODO: Generate real source tree
+            include_paths=[
+                IncludePath(path=path, type=IncludePathType.USER, from_package=None)
+                for path in build_data.get("include_paths", [])
+            ],
+            build_metrics=generate_example_build_metrics(root_pkg),  # TODO: Generate real metrics
+            compiler_config=build_data.get("compiler_info", {})
+        ))
+        
+        # Add dependency nodes
+        y_level = 1
+        for pkg_name, deps in build_data.get("dependency_graph", {}).items():
+            if pkg_name == root_pkg:
+                continue
+                
+            # Add node
+            x_pos = (len(nodes) % 3 - 1) * 1.0  # Spread nodes horizontally
+            nodes.append(DependencyNode(
+                id=pkg_name,
+                name=pkg_name,
+                version=build_data["dependencies"].get(pkg_name, "unknown"),
+                is_dev_dep=False,  # TODO: Determine if dev dep
+                has_warnings=False,
+                size=0,  # TODO: Calculate actual size
+                direct_deps=deps,
+                all_deps=deps,
+                position=Position(x=x_pos, y=float(y_level)),
+                last_used=datetime.now(timezone.utc),
+                source_tree=generate_example_source_tree(pkg_name),  # TODO: Generate real source tree
+                include_paths=[],  # TODO: Get actual include paths
+                build_metrics=generate_example_build_metrics(pkg_name),  # TODO: Generate real metrics
+                compiler_config={}  # TODO: Get actual compiler config
+            ))
+            
+            # Add edges for direct dependencies
+            for dep in deps:
+                edges.append(DependencyEdge(
+                    id=f"{pkg_name}-{dep}",
+                    source=pkg_name,
+                    target=dep,
+                    is_circular=False  # TODO: Detect circular deps
+                ))
+                
+            # Move to next level if we've added 3 nodes at current level
+            if len(nodes) % 3 == 0:
+                y_level += 1
+        
         return GraphLayout(
-            nodes=EXAMPLE_NODES,
-            edges=EXAMPLE_EDGES,
-            warnings=EXAMPLE_WARNINGS
+            nodes=nodes,
+            edges=edges,
+            warnings=warnings
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

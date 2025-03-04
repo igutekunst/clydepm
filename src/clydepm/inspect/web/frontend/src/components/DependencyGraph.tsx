@@ -1,29 +1,36 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import ForceGraph2D from 'react-force-graph-2d';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import ReactFlow, {
+    Node,
+    Edge,
+    Background,
+    Controls,
+    NodeProps,
+    Handle,
+    Position,
+} from 'reactflow';
+import 'reactflow/dist/style.css';
 import { fetchDependencyGraph, fetchGraphSettings } from '../api/client';
 import type { DependencyNode, DependencyEdge, GraphSettings } from '../types';
+import '../styles/DependencyGraph.css';
 
 interface DependencyGraphProps {
     onNodeSelect: (node: DependencyNode | null) => void;
 }
 
-interface ForceGraphNode extends DependencyNode {
-    x?: number;
-    y?: number;
-}
-
-interface ForceGraphLink extends Omit<DependencyEdge, 'source' | 'target'> {
-    source: ForceGraphNode;
-    target: ForceGraphNode;
-}
-
-interface GraphData {
-    nodes: ForceGraphNode[];
-    links: ForceGraphLink[];
-}
+const CustomNode = ({ data }: NodeProps) => (
+    <div className={`custom-node ${data.has_warnings ? 'has-warnings' : ''}`}>
+        <Handle type="target" position={Position.Top} />
+        <div className="node-content">
+            <div className="node-title">{data.name}</div>
+            <div className="node-version">{data.version}</div>
+        </div>
+        <Handle type="source" position={Position.Bottom} />
+    </div>
+);
 
 export function DependencyGraph({ onNodeSelect }: DependencyGraphProps) {
-    const [graphData, setGraphData] = useState<GraphData | null>(null);
+    const [nodes, setNodes] = useState<Node[]>([]);
+    const [edges, setEdges] = useState<Edge[]>([]);
     const [settings, setSettings] = useState<GraphSettings | null>(null);
     const [error, setError] = useState<string | null>(null);
 
@@ -35,20 +42,22 @@ export function DependencyGraph({ onNodeSelect }: DependencyGraphProps) {
                     fetchGraphSettings()
                 ]);
 
-                // Create a map of nodes by ID for quick lookup
-                const nodesMap = new Map(graph.nodes.map(node => [node.id, { ...node }]));
-                
-                // Create the graph data structure that ForceGraph2D expects
-                const graphData: GraphData = {
-                    nodes: Array.from(nodesMap.values()),
-                    links: graph.edges.map(edge => ({
-                        ...edge,
-                        source: nodesMap.get(edge.source)!,
-                        target: nodesMap.get(edge.target)!
-                    }))
-                };
-                
-                setGraphData(graphData);
+                const flowNodes: Node[] = graph.nodes.map(node => ({
+                    id: node.id,
+                    type: 'custom',
+                    position: { x: node.position.x * 200, y: node.position.y * 100 },
+                    data: { ...node }
+                }));
+
+                const flowEdges: Edge[] = graph.edges.map(edge => ({
+                    id: edge.id,
+                    source: edge.source,
+                    target: edge.target,
+                    className: edge.is_circular ? 'circular-edge' : undefined,
+                }));
+
+                setNodes(flowNodes);
+                setEdges(flowEdges);
                 setSettings(graphSettings);
             } catch (e) {
                 setError(e instanceof Error ? e.message : 'Failed to load graph data');
@@ -57,40 +66,30 @@ export function DependencyGraph({ onNodeSelect }: DependencyGraphProps) {
         loadGraphData();
     }, []);
 
-    const handleNodeClick = useCallback((node: ForceGraphNode) => {
-        onNodeSelect(node);
+    const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+        onNodeSelect(node.data);
     }, [onNodeSelect]);
 
     if (error) {
         return <div className="graph-error">{error}</div>;
     }
 
-    if (!graphData || !settings) {
+    if (!settings) {
         return <div className="graph-loading">Loading graph data...</div>;
     }
 
     return (
-        <ForceGraph2D
-            graphData={graphData}
-            nodeId="id"
-            nodeLabel="name"
-            nodeColor={(node: ForceGraphNode) => node.has_warnings ? '#c5221f' : '#1a73e8'}
-            nodeVal={(node: ForceGraphNode) => node.size / 1000}
-            linkColor={(link: ForceGraphLink) => link.is_circular ? '#c5221f' : '#999'}
-            width={settings.layout.width}
-            height={settings.layout.height}
-            onNodeClick={handleNodeClick}
-            nodeCanvasObject={(node: ForceGraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
-                const label = node.name;
-                const fontSize = 12/globalScale;
-                ctx.font = `${fontSize}px Sans-Serif`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillStyle = '#333';
-                ctx.fillText(label, node.x || 0, node.y || 0);
-            }}
-            cooldownTicks={50}
-            d3VelocityDecay={0.1}
-        />
+        <div className="graph-container" style={{ height: settings.layout.height }}>
+            <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                nodeTypes={{ custom: CustomNode }}
+                onNodeClick={handleNodeClick}
+                fitView
+            >
+                <Background />
+                <Controls />
+            </ReactFlow>
+        </div>
     );
 } 

@@ -12,38 +12,41 @@ import './styles/BuildDetails.css';
 import './styles/BuildList.css';
 
 export function App() {
-    const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
-    const [selectedBuild, setSelectedBuild] = useState<BuildData | null>(null);
+    const [selectedNode, setSelectedNode] = useState<DependencyNode | null>(null);
+    const [selectedBuild, setSelectedBuild] = useState<BuildData | undefined>(undefined);
     const [builds, setBuilds] = useState<BuildData[]>([]);
     const [error, setError] = useState<string | null>(null);
 
     const handleNodeSelect = (node: DependencyNode | null) => {
-        setSelectedPackage(node?.id || null);
+        setSelectedNode(node);
     };
 
     useEffect(() => {
-        async function fetchBuilds() {
+        const loadBuilds = async () => {
             try {
                 const allBuilds = await getAllBuilds();
                 setBuilds(allBuilds);
                 if (allBuilds.length > 0) {
-                    setSelectedBuild(allBuilds[0]); // Select the latest build
+                    const latestBuild = await getLatestPackageBuild(allBuilds[0].package_name);
+                    setSelectedBuild(latestBuild || undefined);
                 }
-            } catch (e) {
-                setError(e instanceof Error ? e.message : 'Failed to fetch build data');
+            } catch (error) {
+                console.error('Failed to load builds:', error);
+                setError(error instanceof Error ? error.message : 'Failed to load builds');
             }
-        }
-        fetchBuilds();
+        };
+        loadBuilds();
     }, []);
 
     return (
         <div className="app">
-            <BuildList
-                builds={builds}
-                selectedBuild={selectedBuild || undefined}
-                onSelectBuild={setSelectedBuild}
-            />
-            
+            <div className="sidebar">
+                <BuildList
+                    builds={builds}
+                    selectedBuild={selectedBuild}
+                    onSelectBuild={setSelectedBuild}
+                />
+            </div>
             <div className="main-content">
                 <header className="app-header">
                     <h1>Clyde Build Inspector</h1>
@@ -57,21 +60,16 @@ export function App() {
                     )}
                     
                     <div className="content-grid">
-                        {selectedBuild && (
-                            <div className="build-panel">
+                        <div className="graph-section">
+                            <DependencyGraph onNodeSelect={handleNodeSelect} />
+                        </div>
+                        <div className="details-section">
+                            {selectedNode && (
+                                <DependencyDetails packageId={selectedNode.id} />
+                            )}
+                            {selectedBuild && (
                                 <BuildDetails build={selectedBuild} />
-                            </div>
-                        )}
-                        
-                        <div className="graph-panel">
-                            <h2>Dependency Graph</h2>
-                            <div className="graph-container">
-                                <DependencyGraph onNodeSelect={handleNodeSelect} />
-                            </div>
-                            
-                            <aside className="details-panel">
-                                <DependencyDetails packageId={selectedPackage} />
-                            </aside>
+                            )}
                         </div>
                     </div>
                 </main>
