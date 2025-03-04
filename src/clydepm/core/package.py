@@ -384,3 +384,119 @@ class Package:
             return self.get_build_dir() / f"lib{self.name}.a"
         else:
             return self.get_build_dir() / self.name 
+
+    @property
+    def organization(self) -> Optional[str]:
+        """Get package organization if it exists."""
+        name = self._validated_config.name
+        if name.startswith('@'):
+            return name.split('/')[0][1:]  # Remove @ and get org name
+        return None
+
+    @property
+    def package_name(self) -> str:
+        """Get package name without organization prefix."""
+        name = self._validated_config.name
+        if name.startswith('@'):
+            return name.split('/')[1]
+        return name
+
+    def get_dependency_path(self, name: str) -> Path:
+        """Get the expected path for a dependency.
+        
+        Args:
+            name: Full package name (with optional @org/ prefix)
+            
+        Returns:
+            Path where the dependency should be installed
+        """
+        if name.startswith('@'):
+            # For @org/pkg format, create deps/@org/pkg
+            org = name.split('/')[0][1:]  # Remove @ from org
+            pkg = name.split('/')[1]
+            return self.path / "deps" / org / pkg
+        else:
+            # For backward compatibility, use deps/pkg
+            return self.path / "deps" / name
+
+    def get_build_path(self, name: str) -> Path:
+        """Get the build output path for a dependency.
+        
+        Args:
+            name: Full package name (with optional @org/ prefix)
+            
+        Returns:
+            Path where build artifacts should be stored
+        """
+        if name.startswith('@'):
+            # For @org/pkg format, create build/deps/@org/pkg
+            org = name.split('/')[0][1:]  # Remove @ from org
+            pkg = name.split('/')[1]
+            return self.path / "build" / "deps" / org / pkg
+        else:
+            # For backward compatibility, use build/deps/pkg
+            return self.path / "build" / "deps" / name 
+
+    def get_all_headers(self) -> Dict[str, Path]:
+        """Get all header files in package.
+        
+        Returns:
+            Dictionary mapping header names to their paths
+        """
+        headers = {}
+        include_dir = self.path / "include"
+        if include_dir.exists():
+            for header in include_dir.rglob("*.h"):
+                headers[header.name] = header
+        return headers
+        
+    def check_header_conflicts(self, other_package: "Package") -> List[str]:
+        """Check for header name conflicts with another package.
+        
+        Args:
+            other_package: Package to check against
+            
+        Returns:
+            List of conflicting header names
+        """
+        our_headers = self.get_all_headers()
+        their_headers = other_package.get_all_headers()
+        
+        conflicts = []
+        for name in our_headers:
+            if name in their_headers:
+                # Check if headers are properly namespaced
+                our_path = our_headers[name].relative_to(self.path / "include")
+                their_path = their_headers[name].relative_to(other_package.path / "include")
+                
+                if len(our_path.parts) == 1 or len(their_path.parts) == 1:
+                    # At least one header is not namespaced
+                    conflicts.append(name)
+                    
+        return conflicts
+        
+    def validate_header_organization(self) -> List[str]:
+        """Check if headers follow proper organization.
+        
+        Returns:
+            List of warnings about header organization
+        """
+        warnings = []
+        include_dir = self.path / "include"
+        if not include_dir.exists():
+            return warnings
+            
+        # Check for package namespace directory
+        pkg_include = include_dir / self.package_name
+        if not pkg_include.exists():
+            warnings.append(
+                f"Missing package namespace directory: include/{self.package_name}/"
+            )
+            
+        # Check for headers directly in include/
+        for header in include_dir.glob("*.h"):
+            warnings.append(
+                f"Header {header.name} should be in include/{self.package_name}/"
+            )
+            
+        return warnings 

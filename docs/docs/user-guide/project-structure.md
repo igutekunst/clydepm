@@ -1,127 +1,185 @@
 # Project Structure
 
-A typical Clyde project has the following structure:
+Clyde projects follow a standardized directory structure that promotes clean code organization and separation of concerns. This guide explains the structure and purpose of each component.
+
+## Basic Structure
 
 ```
 my-project/
-├── package.yml        # Project configuration
-├── README.md         # Project documentation
-├── src/             # Source files
-│   ├── main.cpp
-│   └── lib.cpp
-├── include/         # Public headers
-│   └── my-project/  # Project-specific headers
-├── tests/          # Test files
-│   └── test_lib.cpp
-└── build/          # Build artifacts (generated)
+├── config.yaml        # Project configuration
+├── src/              # Source files
+│   └── main.c/cpp    # Main source file
+├── include/          # Public headers
+│   └── my-project/   # Project-specific headers
+├── private_include/  # Private headers
+└── deps/            # Dependencies
 ```
 
-## Configuration
+## Configuration File
 
-The `package.yml` file is the heart of your project, defining its properties and dependencies:
+The `config.yaml` file is the heart of your project, defining its properties and dependencies:
 
 ```yaml
 name: my-project
 version: 0.1.0
-type: library  # or application
-language: cpp  # or c
-
-# Source files to compile
-sources:
-  - src/main.cpp
-  - src/lib.cpp
-
-# Build configuration
+type: application  # or library
 cflags:
-  gcc: -Wall -Wextra
-  g++: -std=c++17
-
-# Dependencies
-requires:
-  fmt: ^8.0.0
-  my-lib:
-    path: ../my-lib
-
-# Build traits (optional)
-traits:
-  debug: false
-  sanitize: false
+  gcc: -std=c11    # or -std=c++17
+requires: {}       # Dependencies
 ```
 
-## Source Organization
+## Directory Descriptions
 
-### Source Files (`src/`)
-- Main implementation files
-- Internal implementation details
-- Private headers (if not in `private_include/`)
+### Source Directory (`src/`)
+
+Contains all implementation files:
+- C source files (`.c`)
+- C++ source files (`.cpp`, `.cxx`, `.cc`)
+- Implementation-specific headers (`.h`, `.hpp`)
+
+```cpp
+// src/main.cpp
+#include <my-project/api.h>
+
+int main() {
+    // Implementation
+    return 0;
+}
+```
 
 ### Public Headers (`include/`)
-- Public API headers
-- Organized in project-specific subdirectory
-- Example: `include/my-project/api.hpp`
+
+Contains headers that are exposed to other projects:
+- API declarations
+- Public types and constants
+- Exported functions
+
+```cpp
+// include/my-project/api.h
+#pragma once
+
+namespace my_project {
+    void public_function();
+}
+```
 
 ### Private Headers (`private_include/`)
-- Internal headers
-- Not installed with the package
+
+Contains internal headers not exposed to other projects:
+- Internal types and functions
 - Implementation details
+- Private utilities
 
-### Tests (`tests/`)
-- Unit tests
-- Integration tests
-- Test utilities
+```cpp
+// private_include/internal.h
+#pragma once
 
-## Build System
+namespace my_project::internal {
+    void helper_function();
+}
+```
 
-The build system:
-- Reads `package.yml` for configuration
-- Compiles source files
-- Links dependencies
-- Generates artifacts in `build/`
+### Dependencies (`deps/`)
 
-### Build Directory (`build/`)
-- Object files (`.o`)
-- Library files (`.a`, `.so`)
-- Executables
-- Build logs
-
-## Dependencies
-
-Dependencies can be:
-- Remote (downloaded from GitHub)
-- Local (in adjacent directories)
-
-Best practices:
-- List all dependencies in `package.yml`
-- Use version constraints
-- Document dependency requirements
+Managed by Clyde, contains:
+- Downloaded remote dependencies
+- Build artifacts
+- Package metadata
 
 ## Project Types
 
-### Library
-```yaml
-# package.yml
-type: library
-language: cpp
+### Library Project
 
-sources:
-  - src/lib.cpp
+Libraries expose public APIs through the `include` directory:
+
+```
+my-lib/
+├── include/
+│   └── my-lib/
+│       ├── api.h      # Public API
+│       └── types.h    # Public types
+├── private_include/
+│   └── internal.h     # Private implementation
+└── src/
+    └── api.cpp        # Implementation
 ```
 
-### Application
-```yaml
-# package.yml
-type: application
-language: cpp
+### Application Project
 
-sources:
-  - src/main.cpp
+Applications typically have a simpler structure:
+
+```
+my-app/
+├── src/
+│   ├── main.cpp       # Entry point
+│   └── app.cpp        # Application logic
+└── private_include/
+    └── app.h          # Internal headers
 ```
 
-## Summary
+## Best Practices
 
-Key components:
-- Configuration (`package.yml`): Project metadata and build settings
-- Source files: Implementation in `src/`
-- Headers: Public API in `include/`
-- Tests: Verification in `tests/`
-- Build: Artifacts in `build/` 
+1. **Header Organization**
+   - Use the project name as a namespace in include paths
+   - Keep implementation details in private headers
+   - Document public APIs thoroughly
+
+2. **Source Organization**
+   - One class per file (when applicable)
+   - Group related functionality in subdirectories
+   - Use clear, descriptive file names
+
+3. **Dependency Management**
+   - List all dependencies in `config.yaml`
+   - Use version constraints appropriately
+   - Document dependency requirements
+
+## Common Patterns
+
+### Feature Modules
+
+Organize large projects into feature modules:
+
+```
+my-project/
+├── src/
+│   ├── feature1/
+│   │   ├── feature1.cpp
+│   │   └── internal.h
+│   └── feature2/
+│       ├── feature2.cpp
+│       └── internal.h
+└── include/
+    └── my-project/
+        ├── feature1.h
+        └── feature2.h
+```
+
+### Test Organization
+
+Organize tests alongside the code they test:
+
+```
+my-project/
+├── src/
+│   └── feature/
+│       ├── feature.cpp
+│       └── feature_test.cpp
+└── include/
+    └── my-project/
+        └── feature.h
+```
+
+## For LLM Analysis
+
+Project structure components and their relationships:
+- Configuration (`config.yaml`): Project metadata and build settings
+- Public interface (`include/`): API contract with consumers
+- Private implementation (`private_include/`, `src/`): Internal details
+- Dependencies (`deps/`): External code management
+
+Key principles:
+1. Separation of public and private interfaces
+2. Namespace-based include organization
+3. Feature-based code organization
+4. Clear dependency management 

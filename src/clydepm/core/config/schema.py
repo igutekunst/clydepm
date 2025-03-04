@@ -11,7 +11,7 @@ class CompilerFlags(BaseModel):
 
 class PackageConfig(BaseModel):
     """Package configuration schema."""
-    name: constr(pattern=r'^[a-zA-Z0-9_-]+$')
+    name: constr(pattern=r'^(?:@[a-zA-Z0-9_-]+/)?[a-zA-Z0-9_-]+$')
     version: str
     type: str = Field(default="library", pattern="^(library|application|foreign)$")
     language: str = Field(pattern="^(c|cpp|cxx|c\\+\\+)$")
