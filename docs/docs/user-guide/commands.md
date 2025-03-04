@@ -90,6 +90,54 @@ clyde run -- --help
 clyde run -- input.txt output.txt
 ```
 
+## Package Management
+
+### `install`
+
+Install packages either as project dependencies or globally.
+
+```bash
+clyde install [PACKAGES...] [OPTIONS]
+```
+
+Options:
+- `PACKAGES`: One or more packages to install (e.g. `fmt@8.1.1`, `json@^1.0.0`)
+- `-g`, `--global`: Install packages globally in `~/.clyde/prefix`
+- `--dev`: Install as development dependency
+- `--exact`: Use exact version matching (pins the version)
+- `--prefix`: Override the global installation prefix (default: `~/.clyde/prefix`)
+
+Examples:
+```bash
+# Add fmt as a project dependency
+clyde install fmt@8.1.1
+
+# Add multiple packages
+clyde install fmt@8.1.1 json@^1.0.0
+
+# Install globally
+clyde install -g fmt@8.1.1
+
+# Install as dev dependency
+clyde install --dev gtest@1.11.0
+
+# Install with custom global prefix
+clyde install -g fmt@8.1.1 --prefix /usr/local
+
+# Install from local path
+clyde install ../my-lib
+```
+
+When installing as a project dependency:
+- Updates `package.yml`'s `requires` section
+- Downloads and builds the package into `clyde_packages/`
+- Maintains a lockfile for reproducible builds
+
+When installing globally (-g):
+- Installs into `~/.clyde/prefix` (or specified prefix)
+- Makes headers and libraries available system-wide
+- Does not modify any project configuration
+
 ## Cache Management
 
 ### `cache`

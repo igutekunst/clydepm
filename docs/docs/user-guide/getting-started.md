@@ -110,7 +110,7 @@ clyde clean
 
 ## Project Configuration
 
-The `config.yaml` file defines your project:
+The `package.yml` file defines your project:
 
 ```yaml
 name: my-project      # Project name
@@ -124,7 +124,7 @@ requires: {}         # Dependencies (empty initially)
 
 ## Adding Dependencies
 
-Clyde supports both local and remote dependencies. Add them to `config.yaml`:
+Clyde supports both local and remote dependencies. Add them to `package.yml`:
 
 ```yaml
 requires:
@@ -199,17 +199,17 @@ export GITHUB_TOKEN=your-token
 
 1. Use project namespacing:
    ```cpp
-   #include <my-lib/api.h>    // Good
-   #include <api.h>           // Bad - no namespace
+   #include <my-lib/api.h>    # Good
+   #include <api.h>           # Bad - no namespace
    ```
 
 2. Keep implementation details private:
    ```cpp
    // In public headers (include/)
-   #include <other-lib/api.h>  // Good - using public API
+   #include <other-lib/api.h>  # Good - using public API
    
    // In private headers (private_include/)
-   #include "internal.h"       // Good - internal only
+   #include "internal.h"       # Good - internal only
    ```
 
 ## Cache Management

@@ -6,6 +6,7 @@ llm_instructions:
   - "Maintain separation of concerns"
   - "Keep dependencies unidirectional"
   - "Add docstrings and type hints"
+  - "Before generating new files, check src and docs first to see if the file already exists"
   - "Update relevant documentation when changing code"
   - "Suggest breaking apart large files when they get too long"
   - "Suggest refactoring code to improve readability and maintainability"
@@ -15,6 +16,7 @@ llm_instructions:
   - "Consider future extensibility"
   - "Ensure changes align with roadmap"
   - "Suggest updating .cursorrules when making changes"
+  - "Read docs/docs/ to understand Clyde's configuration and conventions (e.g. package.yml)"
 
 # Language and Library Standards
 language_standards:

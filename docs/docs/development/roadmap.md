@@ -65,6 +65,9 @@ This document outlines the planned development roadmap for Clyde. It's organized
   - Modern web UI
   - Package metadata API
   - Search functionality
+  - Generate pkgconfig files
+  - Install packages in OS in either user or system prefix
+  - Install packages into current package (like npm install)
 
 ### Development Tools
 - [ ] **[TOOLS-1]** IDE integration

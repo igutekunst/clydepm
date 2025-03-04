@@ -102,9 +102,9 @@ class BuildCache:
         """Check if object file is cached for source file."""
         cached = self.get_object_path(source_path, build_metadata).exists()
         if cached:
-            logger.info("[Cache Hit] Found cached object for %s", source_path.name)
+            logger.debug("[Cache Hit] Found cached object for %s", source_path.name)
         else:
-            logger.info("[Cache Miss] No cached object for %s", source_path.name)
+            logger.debug("[Cache Miss] No cached object for %s", source_path.name)
         return cached
         
     def cache_object(self, source_path: Path, object_path: Path, build_metadata: BuildMetadata) -> None:
@@ -167,9 +167,9 @@ class BuildCache:
         """Check if final artifact is cached."""
         cached = self.get_artifact_path(package, build_metadata).exists()
         if cached:
-            logger.info("[Cache Hit] Found cached artifact for %s %s", package.name, package.version)
+            logger.debug("[Cache Hit] Found cached artifact for %s %s", package.name, package.version)
         else:
-            logger.info("[Cache Miss] No cached artifact for %s %s", package.name, package.version)
+            logger.debug("[Cache Miss] No cached artifact for %s %s", package.name, package.version)
         return cached
         
     def cache_artifact(self, package: Package, build_metadata: BuildMetadata) -> None:

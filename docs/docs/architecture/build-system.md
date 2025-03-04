@@ -110,126 +110,64 @@ class Builder:
     def __init__(self, package: Package):
         self.package = package
         self.cache = BuildCache()
+        
+    def build(self):
+        """Build the package and its dependencies."""
+        # Load configuration
+        config = self.package.load_config()
+        
+        # Resolve dependencies
+        deps = self.resolve_dependencies()
+        
+        # Compile sources
+        objects = self.compile_sources()
+        
+        # Link final artifact
+        self.link_artifact(objects)
 ```
 
-### Build Process Stages
+## Configuration
 
-1. **Package Loading**
-   - Loads `config.yaml`
-   - Validates package configuration
-   - Resolves package type and traits
-
-2. **Cache Management**
-   - Checks for existing artifacts
-   - Validates cache freshness
-   - Manages build artifacts
-
-3. **Dependency Building**
-   - Resolves dependency order
-   - Builds dependencies in correct sequence
-   - Handles both local and remote dependencies
-
-4. **Source Compilation**
-   - Discovers source files
-   - Applies compiler flags
-   - Manages include paths
-   - Generates object files
-
-5. **Linking**
-   - Links object files
-   - Manages library dependencies
-   - Creates final artifact
-
-## Build Configuration
-
-### Compiler Settings
+### Package Configuration (`package.yml`)
 
 ```yaml
+name: my-project
+version: 0.1.0
+type: library
+language: cpp
+
+sources:
+  - src/lib.cpp
+  - src/impl.cpp
+
+requires:
+  fmt: ^8.0.0
+  my-lib:
+    path: ../my-lib
+
 cflags:
-  gcc: -std=c11 -Wall -Wextra
-  clang: -std=c11 -Wall -Wextra
-ldflags:
-  - -lpthread
+  gcc: -Wall -Wextra
+  g++: -std=c++17
 ```
 
-### Build Variants
-
-Build variants allow different configurations:
+### Cache Configuration
 
 ```yaml
-variants:
-  debug:
-    cflags:
-      gcc: -g -O0
-  release:
-    cflags:
-      gcc: -O3
-```
-
-## Caching Strategy
-
-The build system implements intelligent caching:
-
-1. **Input Hashing**
-   - Source files
-   - Header files
-   - Compiler flags
-   - Dependencies
-
-2. **Cache Keys**
-   - Package version
-   - Build variant
-   - Platform information
-
-3. **Cache Invalidation**
-   - Source changes
-   - Dependency updates
-   - Configuration changes
-
-## Error Handling
-
-The build system provides detailed error reporting:
-
-```python
-class BuildError(Exception):
-    def __init__(self, message: str, stage: str):
-        self.stage = stage
-        super().__init__(f"Build failed at {stage}: {message}")
-```
-
-Common error categories:
-- Configuration errors
-- Compilation errors
-- Linking errors
-- Cache errors
-
-## Build Output Structure
-
-```
-build/
-├── <variant>/
-│   ├── obj/
-│   │   └── *.o
-│   └── lib/
-│       └── lib*.a
-└── cache/
-    └── <hash>/
-        └── artifact
+cache_dir: ~/.clydepm/cache
+max_size: 10GB
+ttl: 30d
 ```
 
 ## For LLM Analysis
 
-Key components and their relationships:
-- `Builder`: Orchestrates build process
-- `Package`: Represents package configuration
-- `BuildCache`: Manages build artifacts
-- `Compiler`: Handles source compilation
-- `Linker`: Manages object linking
+- Mermaid diagrams for visual representation
+- Structured code examples
+- Clear component boundaries
+- Explicit relationships
+- Semantic versioning
 
-Build process stages and their cacheability:
-1. Package loading (not cached)
-2. Dependency resolution (cached)
-3. Source compilation (cached)
-4. Linking (cached)
-
-Error handling and recovery strategies are implemented at each stage. 
+When analyzing:
+1. Follow the component hierarchy
+2. Note the data flow patterns
+3. Consider error handling paths
+4. Reference related documentation 
