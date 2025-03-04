@@ -348,7 +348,7 @@ class Package:
 
     def get_build_dir(self) -> Path:
         """Get the build directory for this package."""
-        return self.path / "build"
+        return self.path / ".build"
 
     def get_output_path(self) -> Path:
         """Get the output path for this package's artifacts."""
