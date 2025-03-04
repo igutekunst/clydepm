@@ -4,9 +4,12 @@ from pathlib import Path
 from typing import Dict, List, Optional
 import json
 import time
+import logging
 
 from .hooks import BuildContext, BuildStage
 from ..core.package import Package
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class CompilationStep:
@@ -29,6 +32,9 @@ class BuildData:
     compiler_info: Dict[str, str]
     compilation_steps: List[CompilationStep] = field(default_factory=list)
     dependencies: Dict[str, str] = field(default_factory=dict)
+    dependency_graph: Dict[str, List[str]] = field(default_factory=dict)  # Maps package to its direct dependencies
+    include_paths: List[str] = field(default_factory=list)  # All resolved include paths
+    library_paths: List[str] = field(default_factory=list)  # All resolved library paths
     end_time: float = 0.0
     success: bool = False
     error: Optional[str] = None
@@ -63,6 +69,9 @@ class BuildData:
                 for step in self.compilation_steps
             ],
             "dependencies": self.dependencies,
+            "dependency_graph": self.dependency_graph,
+            "include_paths": self.include_paths,
+            "library_paths": self.library_paths,
             "success": self.success,
             "error": self.error
         }
@@ -84,18 +93,45 @@ class BuildDataCollector:
         builder.add_hook(BuildStage.POST_DEPENDENCY_BUILD, self._on_dependencies_built)
         builder.add_hook(BuildStage.POST_BUILD, self._on_build_end)
         
+        # Register error handler
+        builder.set_error_handler(self.on_build_error)
+        
     def _on_build_start(self, context: BuildContext) -> None:
         """Called when build starts."""
-        self.current_build = BuildData(
-            package_name=context.package.name,
-            package_version=str(context.package.version),
-            start_time=time.time(),
-            compiler_info={
-                "name": context.build_metadata.compiler_info.name,
-                "version": context.build_metadata.compiler_info.version,
-                "target": context.build_metadata.compiler_info.target
-            }
-        )
+        try:
+            # Ensure output directory exists
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+            
+            self.current_build = BuildData(
+                package_name=context.package.name,
+                package_version=str(context.package.version),
+                start_time=time.time(),
+                compiler_info={
+                    "name": context.build_metadata.compiler.name,
+                    "version": context.build_metadata.compiler.version,
+                    "target": context.build_metadata.compiler.target
+                }
+            )
+            
+            # Collect dependency resolution information immediately
+            self.current_build.include_paths = [str(p) for p in context.build_metadata.includes]
+            self.current_build.library_paths = [str(p) for p in context.build_metadata.libs]
+            
+            # Build dependency graph
+            for dep in context.package.get_all_dependencies():
+                self.current_build.dependencies[dep.name] = str(dep.version)
+                # Get direct dependencies for this package
+                direct_deps = list(dep.get_dependencies().keys())  # Get just the package names
+                self.current_build.dependency_graph[dep.name] = direct_deps
+                
+            # Add the main package's direct dependencies to the graph
+            self.current_build.dependency_graph[context.package.name] = list(
+                context.package.get_dependencies().keys()
+            )
+        except Exception as e:
+            error_msg = f"Failed to initialize build data: {str(e)}"
+            logger.error(error_msg)
+            raise Exception(error_msg) from e
         
     def _on_compile_start(self, context: BuildContext) -> None:
         """Called before each compilation step."""
@@ -131,17 +167,51 @@ class BuildDataCollector:
             for dep in context.package.get_all_dependencies()
         }
         
-    def _on_build_end(self, context: BuildContext) -> None:
-        """Called when build ends."""
+    def _save_build_data(self, context: BuildContext, error: Optional[str] = None) -> None:
+        """Save current build data to file."""
         if not self.current_build:
             return
             
         self.current_build.end_time = time.time()
-        self.current_build.success = True
-        
+        if error:
+            self.current_build.success = False
+            self.current_build.error = error
+        else:
+            self.current_build.success = True
+            
         # Save build data
         build_file = self.output_dir / f"build_{context.package.name}_{int(time.time())}.json"
         with open(build_file, 'w') as f:
             json.dump(self.current_build.to_json(), f, indent=2)
             
-        self.current_build = None 
+        self.current_build = None
+        
+    def _on_build_end(self, context: BuildContext) -> None:
+        """Called when build ends successfully."""
+        self._save_build_data(context)
+        
+    def on_build_error(self, context: Optional[BuildContext], error: str) -> None:
+        """Called when build fails with an error."""
+        if self.current_step:
+            self.current_step.end_time = time.time()
+            self.current_step.success = False
+            self.current_step.error = error
+            if self.current_build:
+                self.current_build.compilation_steps.append(self.current_step)
+            self.current_step = None
+            
+        if context:
+            self._save_build_data(context, error)
+        else:
+            # If we don't have a context, just save what we have
+            if self.current_build:
+                self.current_build.end_time = time.time()
+                self.current_build.success = False
+                self.current_build.error = error
+                
+                # Save build data with a generic name
+                build_file = self.output_dir / f"build_error_{int(time.time())}.json"
+                with open(build_file, 'w') as f:
+                    json.dump(self.current_build.to_json(), f, indent=2)
+                    
+                self.current_build = None 

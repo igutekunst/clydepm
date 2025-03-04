@@ -26,28 +26,6 @@ file_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
 file_handler.setLevel(logging.DEBUG)
 logger.addHandler(file_handler)
 
-class BuildStage(Enum):
-    """Build stages for hooks."""
-    PRE_BUILD = auto()
-    POST_DEPENDENCY_BUILD = auto()
-    PRE_COMPILE = auto()
-    POST_COMPILE = auto()
-    PRE_LINK = auto()
-    POST_LINK = auto()
-    POST_BUILD = auto()
-
-@dataclass
-class BuildContext:
-    """Context passed to build hooks."""
-    package: Package
-    build_metadata: BuildMetadata
-    traits: Dict[str, str]
-    verbose: bool
-    source_file: Optional[Path] = None  # For compile hooks
-    object_file: Optional[Path] = None  # For compile hooks
-    output_file: Optional[Path] = None  # For link hooks
-    command: Optional[List[str]] = None  # For command hooks
-
 @dataclass
 class BuildResult:
     """Result of a build operation."""
@@ -66,6 +44,7 @@ class Builder:
         """
         self.cache = BuildCache(cache_dir)
         self.hook_manager = BuildHookManager()
+        self.error_handler = None
         
         # Initialize and register build data collector
         build_data_dir = cache_dir / "build_data" if cache_dir else Path.home() / ".clydepm" / "build_data"
@@ -75,6 +54,10 @@ class Builder:
     def add_hook(self, stage: BuildStage, hook: Callable[[BuildContext], None]) -> None:
         """Add a build hook."""
         self.hook_manager.add_hook(stage, hook)
+        
+    def set_error_handler(self, handler: Callable[[BuildContext, str], None]) -> None:
+        """Set the error handler for build failures."""
+        self.error_handler = handler
         
     def _get_compiler_info(self) -> CompilerInfo:
         """Get information about the current compiler."""
@@ -348,6 +331,74 @@ class Builder:
                 return error_msg
         return None
 
+    def _build_package(self, context: BuildContext) -> BuildResult:
+        """Build a package after dependencies are built.
+        
+        Args:
+            context: Build context
+            
+        Returns:
+            BuildResult indicating success/failure and artifacts
+        """
+        try:
+            # Get source files and make paths relative to build dir
+            sources = context.package.get_source_files()
+            if not sources:
+                return BuildResult(
+                    success=False,
+                    error=f"No source files found in {os.path.relpath(context.package.path/'src')}"
+                )
+                
+            # Compile each source file
+            objects = []
+            for source in sources:
+                # Use relative paths for object files
+                object_path = Path(f"{source.stem}.o")
+                error = self._compile_source(
+                    source,
+                    object_path,
+                    context.package,
+                    context.build_metadata,
+                    context.verbose,
+                    context.traits
+                )
+                if error:
+                    return BuildResult(success=False, error=error)
+                objects.append(object_path)
+                
+            # Link objects
+            if context.package.package_type == PackageType.LIBRARY:
+                output_name = f"lib{context.package.name}.a"
+            else:
+                output_name = context.package.name
+            output_path = Path(output_name)
+            
+            error = self._link_objects(
+                objects,
+                output_path,
+                context.package,
+                context.build_metadata,
+                context.verbose,
+                context.traits
+            )
+            if error:
+                return BuildResult(success=False, error=error)
+                
+            # Run post-build hooks
+            self.hook_manager.run_hooks(BuildStage.POST_BUILD, context)
+                
+            # Return success with artifacts (convert back to absolute paths)
+            return BuildResult(
+                success=True,
+                artifacts={"output": context.package.get_build_dir() / output_path}
+            )
+        except Exception as e:
+            logger.error("Build failed: %s", e)
+            return BuildResult(
+                success=False,
+                error=f"Build failed: {str(e)}"
+            )
+
     def build(
         self,
         package: Package,
@@ -378,23 +429,25 @@ class Builder:
             try:
                 build_dir.mkdir(parents=True, exist_ok=True)
             except Exception as e:
-                return BuildResult(
-                    success=False,
-                    error=f"Failed to create build directory at {build_dir}: {str(e)}"
-                )
+                error_msg = f"Failed to create build directory at {build_dir}: {str(e)}"
+                if self.error_handler:
+                    context = BuildContext(package, build_metadata, traits or {}, verbose)
+                    self.error_handler(context, error_msg)
+                return BuildResult(success=False, error=error_msg)
             
             # Change to build directory for all operations
             try:
                 old_cwd = Path.cwd()
                 os.chdir(build_dir)
             except Exception as e:
-                return BuildResult(
-                    success=False,
-                    error=f"Failed to change to build directory {build_dir} from {old_cwd}: {str(e)}"
-                )
+                error_msg = f"Failed to change to build directory {build_dir} from {old_cwd}: {str(e)}"
+                if self.error_handler:
+                    context = BuildContext(package, build_metadata, traits or {}, verbose)
+                    self.error_handler(context, error_msg)
+                return BuildResult(success=False, error=error_msg)
                 
             try:
-                # Create context for hooks with paths relative to build dir
+                # Create build context
                 context = BuildContext(
                     package=package,
                     build_metadata=build_metadata,
@@ -402,84 +455,57 @@ class Builder:
                     verbose=verbose
                 )
                 
-                # Run pre-build hooks
-                self.hook_manager.run_hooks(BuildStage.PRE_BUILD, context)
+                try:
+                    # Run pre-build hooks
+                    self.hook_manager.run_hooks(BuildStage.PRE_BUILD, context)
+                except Exception as e:
+                    error_msg = str(e)
+                    if self.error_handler:
+                        self.error_handler(context, error_msg)
+                    return BuildResult(success=False, error=error_msg)
                 
                 # Build dependencies first
-                error = self._build_dependencies(package, traits, verbose)
-                if error:
-                    return BuildResult(success=False, error=error)
-                    
+                for dep_name, dep_version in package.get_dependencies().items():
+                    # TODO: Resolve and load dependency package
+                    # For now, assume it's a local package in the same directory
+                    dep_dir = package.path.parent / dep_name
+                    dep_package = Package(dep_dir)
+                    result = self.build(dep_package, traits, verbose)
+                    if not result.success:
+                        error_msg = f"Failed to build dependency {dep_name}: {result.error}"
+                        if self.error_handler:
+                            self.error_handler(context, error_msg)
+                        return result
+                
                 # Run post-dependency hooks
-                self.hook_manager.run_hooks(BuildStage.POST_DEPENDENCY_BUILD, context)
-                
-                # Get source files and make paths relative to build dir
-                sources = package.get_source_files()
-                if not sources:
-                    return BuildResult(
-                        success=False,
-                        error=f"No source files found in {os.path.relpath(package.path/'src')}"
-                    )
-                    
-                # Compile each source file
-                objects = []
-                for source in sources:
-                    # Use relative paths for object files
-                    object_path = Path(f"{source.stem}.o")
-                    error = self._compile_source(
-                        source,
-                        object_path,
-                        package,
-                        build_metadata,
-                        verbose,
-                        traits
-                    )
-                    if error:
-                        return BuildResult(success=False, error=error)
-                    objects.append(object_path)
-                    
-                # Link objects
-                if package.package_type == PackageType.LIBRARY:
-                    output_name = f"lib{package.name}.a"
-                else:
-                    output_name = package.name
-                output_path = Path(output_name)
-                
-                error = self._link_objects(
-                    objects,
-                    output_path,
-                    package,
-                    build_metadata,
-                    verbose,
-                    traits
-                )
-                if error:
-                    return BuildResult(success=False, error=error)
-                    
-                # Run post-build hooks
-                self.hook_manager.run_hooks(BuildStage.POST_BUILD, context)
-                    
-                # Return success with artifacts (convert back to absolute paths)
-                return BuildResult(
-                    success=True,
-                    artifacts={"output": build_dir / output_path}
-                )
-            except Exception as e:
-                logger.error("Build failed: %s", e)
-                return BuildResult(
-                    success=False,
-                    error=f"Build failed in directory {build_dir}: {str(e)}"
-                )
-            finally:
-                # Always try to restore the original working directory
                 try:
-                    os.chdir(old_cwd)
+                    self.hook_manager.run_hooks(BuildStage.POST_DEPENDENCY_BUILD, context)
                 except Exception as e:
-                    logger.error("Failed to restore working directory to %s: %s", old_cwd, e)
+                    error_msg = str(e)
+                    if self.error_handler:
+                        self.error_handler(context, error_msg)
+                    return BuildResult(success=False, error=error_msg)
+                
+                # Build the package
+                result = self._build_package(context)
+                if not result.success and self.error_handler:
+                    self.error_handler(context, result.error)
+                return result
+                
+            finally:
+                # Change back to original directory
+                os.chdir(old_cwd)
                 
         except Exception as e:
-            logger.error("Build failed: %s", e)
-            return BuildResult(
-                success=False,
-                error=str(e)
-            ) 
+            error_msg = f"Unexpected error during build: {str(e)}"
+            if hasattr(e, '__cause__') and e.__cause__:
+                error_msg = f"{error_msg}\nCaused by: {str(e.__cause__)}"
+            if self.error_handler:
+                try:
+                    context = BuildContext(package, build_metadata, traits or {}, verbose)
+                    self.error_handler(context, error_msg)
+                except:
+                    # If we can't create the context, just pass the error without context
+                    if self.error_handler:
+                        self.error_handler(None, error_msg)
+            return BuildResult(success=False, error=error_msg) 

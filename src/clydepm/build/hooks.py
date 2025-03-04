@@ -72,5 +72,9 @@ class BuildHookManager:
             except Exception as e:
                 # Log the full error for debugging
                 logger.debug("Hook failed at %s stage: %s", stage, e)
+                # Get the original error message
+                error_msg = str(e)
+                if hasattr(e, '__cause__') and e.__cause__:
+                    error_msg = str(e.__cause__)
                 # Raise a cleaner error for user display
-                raise Exception(f"Build failed during {str(stage)}") from e 
+                raise Exception(f"Build failed during {str(stage)}: {error_msg}") from e 
