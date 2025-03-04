@@ -2,19 +2,21 @@
 Package management commands.
 """
 from pathlib import Path
-from typing import List, Optional, Dict, Set
+from typing import List, Optional, Dict, Set, Tuple
 import typer
 from rich.console import Console
 from rich.table import Table
 import json
 import logging
-from rich.progress import Progress
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
+import shutil
 
 from ...core.install import GlobalInstaller
 from ...core.package import Package
 from ...github.registry import GitHubRegistry
 from ...github.config import GitHubConfigError, get_github_token
 from ...build.builder import Builder
+from ...core.version.version import Version
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -203,7 +205,6 @@ def uninstall(
                         
             # Remove package directory
             logger.debug(f"Removing package directory: {package_dir}")
-            import shutil
             shutil.rmtree(package_dir)
             
             console.print(f"[green]Successfully uninstalled {package_name}[/green]")
@@ -286,45 +287,39 @@ def search(
         logger.debug("Error details:", exc_info=True)
         raise typer.Exit(1)
 
-def parse_package_spec(spec: str) -> tuple[str, Optional[str], Optional[str]]:
+def parse_package_spec(spec: str) -> Tuple[str, Optional[str], Optional[str]]:
     """Parse a package specification.
     
-    Formats supported:
-    - package
+    Formats:
     - package@version
-    - @username/package
     - @username/package@version
     
-    Args:
-        spec: Package specification
-        
     Returns:
         Tuple of (package_name, version, username)
     """
     username = None
     version = None
     
-    # Check if it's a scoped package (@username/package)
+    # Check for username
     if spec.startswith("@"):
-        try:
-            username, rest = spec[1:].split("/", 1)
-            if not username or not rest:
-                raise ValueError(f"Invalid package specification: {spec}. Username and package name cannot be empty")
-        except ValueError as e:
-            if "cannot be empty" in str(e):
-                raise e
+        parts = spec[1:].split("/", 1)
+        if len(parts) != 2:
             raise ValueError(f"Invalid package specification: {spec}. Expected format: @username/package[@version]")
-        spec = rest
-    
+        username = parts[0]
+        spec = parts[1]
+        
     # Check for version
     if "@" in spec:
-        package_name, version = spec.split("@", 1)
-        if not package_name:
-            raise ValueError("Package name cannot be empty")
+        package_name, version_str = spec.split("@", 1)
+        try:
+            # Validate version string
+            if version_str != "latest":
+                Version.parse(version_str)
+            version = version_str
+        except ValueError as e:
+            raise ValueError(f"Invalid version format in {spec}: {e}")
     else:
         package_name = spec
-        if not package_name:
-            raise ValueError("Package name cannot be empty")
         
     return package_name, version, username
 
@@ -417,19 +412,20 @@ def install(
     )
     
     # Configure our loggers specifically
-    for logger_name in ['clydepm.cli', 'clydepm.github', 'clydepm.core', 'clydepm.build']:
+    for logger_name in ['clydepm.cli', 'clydepm.github', 'clydepm.core', 'clydepm.build', 'build']:
         module_logger = logging.getLogger(logger_name)
         module_logger.setLevel(log_level)
-        # Remove any existing handlers
-        module_logger.handlers = []
-        # Add a new handler that respects our format
+        module_logger.handlers = [h for h in module_logger.handlers if isinstance(h, logging.FileHandler)]
         handler = logging.StreamHandler()
         if verbose:
-            formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+            handler.setLevel(logging.DEBUG)
+            formatter = logging.Formatter('[%(name)s] %(message)s')
         else:
+            handler.setLevel(logging.INFO)
             formatter = logging.Formatter('%(message)s')
         handler.setFormatter(formatter)
         module_logger.addHandler(handler)
+        module_logger.propagate = False
     
     # Create builder instance
     builder = Builder()
@@ -451,11 +447,6 @@ def install(
         in_package_dir = False
         logger.debug("No package found in current directory")
     
-    # Handle case where we're in a package directory with -g and no packages specified
-    if global_install and not packages and in_package_dir:
-        packages = ["."]  # Use . to indicate current directory
-        logger.debug("No packages specified, will install current package")
-        
     if not packages and not in_package_dir:
         console.print("[red]Error:[/red] No packages specified")
         raise typer.Exit(1)
@@ -471,7 +462,98 @@ def install(
         # Create registries dict to cache registries by username/org
         registries = {}
         
-        if global_install:
+        if not global_install:
+            # Local installation - add as dependency
+            if not in_package_dir:
+                console.print("[red]Error:[/red] No package.yml found in current directory")
+                console.print("To install packages globally, use the -g flag")
+                console.print("To install as a dependency, run this command in a directory with a package.yml")
+                raise typer.Exit(1)
+                
+            # Create deps directory if it doesn't exist
+            deps_dir = Path.cwd() / "deps"
+            deps_dir.mkdir(exist_ok=True)
+            
+            # Install each package as a dependency
+            for pkg_spec in packages:
+                try:
+                    name, version, username = parse_package_spec(pkg_spec)
+                    
+                    # Use specified username or fallback to organization from config
+                    org = username or organization
+                    if not org:
+                        from ...github.config import load_config
+                        config = load_config()
+                        org = config.get("organization")
+                        
+                    # Get or create registry for this org
+                    if org not in registries:
+                        registries[org] = GitHubRegistry(token, org)
+                    registry = registries[org]
+                    
+                    # Show progress
+                    with Progress(
+                        SpinnerColumn(),
+                        TextColumn("[bold blue]Installing {name}@{version}[/bold blue]".format(
+                            name=name,
+                            version=version or "latest"
+                        )),
+                        BarColumn(bar_width=None),
+                        TextColumn("[dim]Building...[/dim]"),
+                        refresh_per_second=4,
+                        transient=False,
+                        expand=True
+                    ) as progress:
+                        task = progress.add_task("Installing...", total=None)
+                        
+                        # Get package from registry
+                        package = registry.get_package(name, version or "latest")
+                        progress.update(task, advance=1)
+                        
+                        # Install into deps directory
+                        package_dir = deps_dir / name
+                        if package_dir.exists():
+                            if not force:
+                                console.print(f"\n[yellow]Warning:[/yellow] Package {name} is already installed")
+                                if not typer.confirm("Do you want to overwrite it?"):
+                                    continue
+                            shutil.rmtree(package_dir)
+                            
+                        # Copy package files
+                        shutil.copytree(package.path, package_dir)
+                        progress.update(task, advance=1)
+                        
+                        # Update package.yml with new dependency
+                        if dev:
+                            if "dev_requires" not in current_package._config:
+                                current_package._config["dev_requires"] = {}
+                            current_package._config["dev_requires"][f"@{org}/{name}"] = f"^{package.version}"
+                        else:
+                            if "requires" not in current_package._config:
+                                current_package._config["requires"] = {}
+                            current_package._config["requires"][f"@{org}/{name}"] = f"^{package.version}"
+                            
+                        # Save updated package.yml
+                        current_package.save_config()
+                        progress.update(task, advance=1, status="[green]Complete[/green]")
+                        
+                    console.print(f"\n[green]✓[/green] Added dependency [blue]{name}[/blue]@[green]{package.version}[/green]")
+                    
+                except Exception as e:
+                    console.print(f"\n[red]Error:[/red] Failed to install {pkg_spec}: {e}")
+                    logger.debug("Error details:", exc_info=True)
+                    continue
+                    
+            console.print("\n[bold green]✓[/bold green] Installation complete!")
+            
+        else:
+            # Handle global installation (existing code)
+            if not in_package_dir:
+                console.print("[red]Error:[/red] No package.yml found in current directory")
+                console.print("To install packages globally, use the -g flag")
+                console.print("To install as a dependency, run this command in a directory with a package.yml")
+                raise typer.Exit(1)
+                
             # First check all packages for existing files
             all_existing = set()
             for pkg_spec in packages:
@@ -503,29 +585,41 @@ def install(
                 
             # If files exist and not forcing, prompt user
             if all_existing and not force:
-                console.print("\nThe following files already exist:")
+                console.print("\n[yellow]Warning:[/yellow] The following files already exist:")
                 for path in sorted(all_existing):
-                    console.print(f"  {path}")
+                    console.print(f"  • [dim]{path}[/dim]")
                     
                 if not typer.confirm("\nDo you want to overwrite these files?"):
-                    console.print("Installation cancelled.")
+                    console.print("\n[yellow]Installation cancelled.[/yellow]")
                     raise typer.Exit(1)
                     
                 # Force is now True after user confirmation
                 force = True
+                console.print()  # Add blank line for spacing
             
             # Use a single progress display for all operations
             with Progress(
-                transient=True,  # Hide progress when done
-                refresh_per_second=10,  # Lower refresh rate
-                disable=verbose  # Disable progress in verbose mode
+                "{task.description}",
+                SpinnerColumn(),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TextColumn("{task.fields[status]}"),
+                console=console,
+                transient=False,  # Keep progress visible until complete
+                refresh_per_second=4,  # Lower refresh rate
+                disable=verbose,  # Disable progress in verbose mode
+                expand=True  # Allow progress bar to use full width
             ) as progress:
                 # Install each package
                 for pkg_spec in packages:
                     if pkg_spec == ".":
                         # Installing current package
                         package = current_package
-                        task = progress.add_task(f"Building {package.name}...", total=4)
+                        task = progress.add_task(
+                            f"[bold blue]Building {package.name}[/bold blue]",
+                            total=4,
+                            status="[dim]Building...[/dim]"
+                        )
                         logger.debug(f"Building current package for global installation")
                         
                         # Build the package
@@ -533,7 +627,7 @@ def install(
                         if not build_result.success:
                             console.print(f"[red]Error:[/red] {build_result.error}")
                             raise typer.Exit(1)
-                        progress.update(task, advance=1)
+                        progress.update(task, advance=1, status="[dim]Building...[/dim]")
                         
                         # Get paths to built artifacts from build result
                         output_path = build_result.artifacts["output"]
@@ -546,7 +640,7 @@ def install(
                             logger.debug(f"Installing binary: {binary}")
                             if not installer.install_binary(binary, package.name, package.name, overwrite=force):
                                 raise typer.Exit(1)
-                        progress.update(task, advance=1)
+                        progress.update(task, advance=1, status="[dim]Installing binaries...[/dim]")
                         
                         if package.package_type in ["library", "application"]:
                             # Install library
@@ -555,7 +649,7 @@ def install(
                             logger.debug(f"Installing library: {library}")
                             if not installer.install_library(library, lib_name, package.name, overwrite=force):
                                 raise typer.Exit(1)
-                            progress.update(task, advance=1)
+                            progress.update(task, advance=1, status="[dim]Installing libraries...[/dim]")
                             
                             # Install headers - directly into include/packagename/
                             include_dir = package.path / "include"
@@ -588,7 +682,7 @@ def install(
                                 getattr(package, 'dependencies', {})  # Default to empty dict if not present
                             ):
                                 logger.warning("Failed to write installation metadata")
-                        progress.update(task, advance=1)
+                        progress.update(task, advance=1, status="[green]Complete[/green]")
                         
                     else:
                         # Parse package spec
@@ -606,12 +700,16 @@ def install(
                                 registries[org] = GitHubRegistry(token, org)
                             registry = registries[org]
                             
-                            task = progress.add_task(f"Downloading {name} {version or 'latest'}...", total=4)
+                            task = progress.add_task(
+                                f"[bold blue]Installing {name}@{version or 'latest'}[/bold blue]",
+                                total=4,
+                                status=""
+                            )
                             logger.debug(f"Downloading package: {name}@{version or 'latest'} from {org}")
                             
                             # Get package from registry
                             package = registry.get_package(name, version or "latest")
-                            progress.update(task, advance=1)
+                            progress.update(task, advance=1, status="[dim]Downloading...[/dim]")
                             
                         except ValueError as e:
                             console.print(f"[red]Error:[/red] {str(e)}")
@@ -622,7 +720,7 @@ def install(
                         if not build_result.success:
                             console.print(f"[red]Error:[/red] {build_result.error}")
                             raise typer.Exit(1)
-                        progress.update(task, advance=1)
+                        progress.update(task, advance=1, status="[dim]Building...[/dim]")
                         
                         # Get paths to built artifacts from build result
                         output_path = build_result.artifacts["output"]
@@ -634,7 +732,7 @@ def install(
                             logger.debug(f"Installing binary: {binary}")
                             if not installer.install_binary(binary, package.name, package.name, overwrite=force):
                                 raise typer.Exit(1)
-                        progress.update(task, advance=1)
+                        progress.update(task, advance=1, status="[dim]Installing binaries...[/dim]")
                         
                         if package.package_type in ["library", "application"]:
                             # Install library
@@ -675,25 +773,189 @@ def install(
                                 getattr(package, 'dependencies', {})  # Default to empty dict if not present
                             ):
                                 logger.warning("Failed to write installation metadata")
-                        progress.update(task, advance=1)
+                        progress.update(task, advance=1, status="[green]Complete[/green]")
                     
-            console.print("[green]Global installation complete![/green]")
-            
-        else:
-            # Handle local installation
-            if not in_package_dir:
-                console.print("[red]Error:[/red] No package.yml found in current directory")
-                console.print("To install packages globally, use the -g flag")
-                console.print("To install as a dependency, run this command in a directory with a package.yml")
-                raise typer.Exit(1)
-                
-            # TODO: Implement local installation
-            console.print("[yellow]Note:[/yellow] Without -g, this will install the package as a dependency in the current package")
-            console.print("[yellow]Local installation is not yet implemented[/yellow]")
+            console.print("\n[bold green]✓[/bold green] Installation complete! [dim]Installed packages:[/dim]")
+            for pkg_spec in packages:
+                if pkg_spec == ".":
+                    console.print(f"  • [blue]{current_package.name}[/blue]@[green]{current_package.version}[/green]")
+                else:
+                    name, version, _ = parse_package_spec(pkg_spec)
+                    console.print(f"  • [blue]{name}[/blue]@[green]{version or 'latest'}[/green]")
+            console.print()
             
     except GitHubConfigError as e:
         console.print(f"[red]Error:[/red] {str(e)}")
         raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        logger.debug("Error details:", exc_info=True)
+        raise typer.Exit(1)
+
+@package_cmd.command()
+def update(
+    packages: Optional[List[str]] = typer.Argument(
+        None,
+        help="Packages to update. If not specified, updates all dependencies."
+    ),
+    dev: bool = typer.Option(
+        False,
+        help="Update development dependencies"
+    ),
+    exact: bool = typer.Option(
+        False,
+        help="Use exact version matching"
+    ),
+    organization: Optional[str] = typer.Option(
+        None,
+        "--org", "--organization",
+        help="GitHub organization to use (overrides config)",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose", "-v",
+        help="Enable verbose output"
+    )
+) -> None:
+    """Update dependencies to their latest compatible versions."""
+    
+    # Configure logging
+    log_level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(level=log_level)
+    logger.setLevel(log_level)
+    
+    try:
+        # Load current package
+        try:
+            current_package = Package(Path.cwd())
+        except FileNotFoundError:
+            console.print("[red]Error:[/red] No package.yml found in current directory")
+            raise typer.Exit(1)
+            
+        # Get GitHub token
+        token = get_github_token()
+        if not token:
+            console.print("[red]Error:[/red] No GitHub token configured")
+            console.print("Run 'clyde auth' to set up GitHub authentication")
+            raise typer.Exit(1)
+            
+        # Create registries dict to cache registries by username/org
+        registries = {}
+        
+        # Get dependencies to update
+        deps_to_update = {}
+        if packages:
+            # Update specific packages
+            for pkg_spec in packages:
+                name, version, username = parse_package_spec(pkg_spec)
+                
+                # Find package in requires or dev_requires
+                found = False
+                for deps in [current_package._validated_config.requires, current_package._validated_config.dev_requires]:
+                    for dep_name, dep_spec in deps.items():
+                        if dep_name.endswith(f"/{name}"):
+                            deps_to_update[dep_name] = {
+                                "current_spec": dep_spec,
+                                "username": username or dep_name.split("/")[0][1:],  # Extract username from @username/package
+                                "requested_version": version
+                            }
+                            found = True
+                            break
+                    if found:
+                        break
+                        
+                if not found:
+                    console.print(f"[yellow]Warning:[/yellow] Package {name} not found in dependencies")
+        else:
+            # Update all dependencies
+            if dev:
+                deps = current_package._validated_config.dev_requires
+            else:
+                deps = current_package._validated_config.requires
+                
+            for dep_name, dep_spec in deps.items():
+                if dep_spec.startswith("local:"):
+                    continue  # Skip local dependencies
+                    
+                username = dep_name.split("/")[0][1:]  # Extract username from @username/package
+                deps_to_update[dep_name] = {
+                    "current_spec": dep_spec,
+                    "username": username,
+                    "requested_version": None
+                }
+                
+        if not deps_to_update:
+            console.print("No dependencies to update")
+            return
+            
+        # Update each dependency
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TextColumn("{task.fields[status]}"),
+            console=console,
+            transient=False,
+            refresh_per_second=4,
+            expand=True
+        ) as progress:
+            task = progress.add_task(
+                "Updating dependencies...",
+                total=len(deps_to_update),
+                status=""
+            )
+            
+            for dep_name, dep_info in deps_to_update.items():
+                username = dep_info["username"]
+                current_spec = dep_info["current_spec"]
+                requested_version = dep_info["requested_version"]
+                
+                # Use specified username/org or fallback to config
+                org = username or organization
+                if not org:
+                    from ...github.config import load_config
+                    config = load_config()
+                    org = config.get("organization")
+                    
+                # Get or create registry for this org
+                if org not in registries:
+                    registries[org] = GitHubRegistry(token, org)
+                registry = registries[org]
+                
+                try:
+                    # Get package name without org prefix
+                    name = dep_name.split("/")[-1]
+                    
+                    # Get latest version
+                    package = registry.get_package(name, requested_version or "latest")
+                    new_version = package.version
+                    
+                    # Check if update is needed
+                    if current_spec.startswith("^"):
+                        current_version = current_spec[1:]
+                        if Version.parse(new_version) <= Version.parse(current_version):
+                            progress.update(task, advance=1, status=f"[dim]{name} already up to date[/dim]")
+                            continue
+                            
+                    # Update dependency version
+                    if dev:
+                        current_package._validated_config.dev_requires[dep_name] = f"^{new_version}"
+                    else:
+                        current_package._validated_config.requires[dep_name] = f"^{new_version}"
+                        
+                    progress.update(task, advance=1, status=f"[green]Updated {name} to {new_version}[/green]")
+                    
+                except Exception as e:
+                    console.print(f"\n[red]Error:[/red] Failed to update {dep_name}: {e}")
+                    logger.debug("Error details:", exc_info=True)
+                    continue
+                    
+            # Save updated package.yml
+            current_package.save_config()
+            
+        console.print("\n[bold green]✓[/bold green] Dependencies updated!")
+        
     except Exception as e:
         console.print(f"[red]Error:[/red] {str(e)}")
         logger.debug("Error details:", exc_info=True)

@@ -16,12 +16,14 @@ import io
 
 from github import Github, Repository, GitRelease
 from github.GithubException import GithubException
-from semantic_version import Version
+from ..core.version.version import Version
 from rich import print as rprint
+from rich.console import Console
 
 from ..core.package import Package, BuildMetadata, CompilerInfo
 
 logger = logging.getLogger(__name__)
+console = Console()
 
 class GitHubRegistry:
     """
@@ -38,7 +40,7 @@ class GitHubRegistry:
         })
         
     def get_package(self, name: str, version: str = "latest") -> Package:
-        """Get a package from the registry.
+        """Get package from GitHub.
         
         Args:
             name: Package name
@@ -50,148 +52,136 @@ class GitHubRegistry:
         Raises:
             ValueError: If package or version not found
         """
-        if not name:
-            raise ValueError("Package name cannot be empty")
+        try:
+            # First try to find a release
+            releases_url = f"https://api.github.com/repos/{self.organization}/{name}/releases"
+            response = self.session.get(releases_url)
             
-        if not self.organization:
-            raise ValueError("No organization specified. Use --org option or configure default organization")
-            
-        logger.debug(f"Looking up package {name} in {self.organization}")
-        
-        # First check if repository exists
-        repo_url = f"https://api.github.com/repos/{self.organization}/{name}"
-        response = self.session.get(repo_url)
-        
-        if response.status_code == 404:
-            raise ValueError(f"Package {name} not found in {self.organization}")
-        elif response.status_code != 200:
-            raise ValueError(f"Failed to lookup package {name}: {response.text}")
-            
-        # First try to find a release
-        releases_url = f"https://api.github.com/repos/{self.organization}/{name}/releases"
-        response = self.session.get(releases_url)
-        
-        if response.status_code == 200:
-            releases = response.json()
             selected_release = None
+            tarball_url = None
             
-            if releases:
-                release_tags = [r['tag_name'] for r in releases]
-                logger.debug(f"Found releases: {release_tags}")
-                if version == "latest":
-                    # Use latest release
-                    selected_release = releases[0]
-                    version = selected_release["tag_name"].lstrip("v")
-                    logger.info(f"Using latest release: {version}")
+            if response.status_code == 200:
+                releases = response.json()
+                if releases:
+                    if version == "latest":
+                        # Get latest release
+                        selected_release = releases[0]
+                        version = selected_release["tag_name"].lstrip("v")
+                        console.print(f"✓ Found matching tag: [green]{version}[/green]")
+                        logger.debug(f"Using latest release: {version}")
+                        tarball_url = selected_release["tarball_url"]
+                    else:
+                        # Find specific version
+                        for release in releases:
+                            if release["tag_name"].lstrip("v") == version:
+                                selected_release = release
+                                tarball_url = release["tarball_url"]
+                                break
+                        if not selected_release:
+                            logger.debug("[dim]No matching release found, checking tags...[/dim]")
+
+            # If no release found, try tags
+            if not selected_release:
+                tags_url = f"https://api.github.com/repos/{self.organization}/{name}/tags"
+                response = self.session.get(tags_url)
+                
+                if response.status_code != 200:
+                    raise ValueError(f"Failed to get versions for {name}: {response.text}")
+                    
+                tags = response.json()
+                
+                if tags:
+                    tag_names = [t['name'] for t in tags]
+                    logger.debug(f"Available tags: {', '.join(tag_names)}")
+                    if version == "latest":
+                        # Use first tag (most recent)
+                        tag = tags[0]
+                        version = tag["name"].lstrip("v")
+                        console.print(f"✓ Found matching tag: [green]{version}[/green]")
+                        logger.debug(f"Using latest tag: {version}")
+                        tarball_url = f"https://api.github.com/repos/{self.organization}/{name}/tarball/{tag['name']}"
+                    else:
+                        # Find matching tag
+                        for tag in tags:
+                            if tag["name"].lstrip("v") == version:
+                                console.print(f"✓ Found matching tag: [green]{tag['name']}[/green]")
+                                logger.debug(f"Found matching tag: {tag['name']}")
+                                tarball_url = f"https://api.github.com/repos/{self.organization}/{name}/tarball/{tag['name']}"
+                                break
+                        else:
+                            raise ValueError(f"Version {version} not found in tags")
+                elif version == "latest":
+                    # No tags, fall back to main branch
+                    logger.debug("[dim]No tags found, using main branch[/dim]")
+                    tarball_url = f"https://api.github.com/repos/{self.organization}/{name}/tarball/main"
+                    version = "main"
                 else:
-                    # Find matching release
-                    for release in releases:
-                        if release["tag_name"].lstrip("v") == version:
-                            selected_release = release
-                            logger.info(f"Found matching release: {release['tag_name']}")
+                    raise ValueError(f"No versions found for package {name}")
+
+            if not tarball_url:
+                raise ValueError(f"Could not find version {version} for package {name}")
+            
+            # Create package directory under ~/.clyde/sources
+            sources_dir = Path.home() / ".clyde" / "sources" / self.organization / name / version
+            sources_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Download source code if not already downloaded
+            package_yml = sources_dir / "package.yml"
+            if not package_yml.exists():
+                logger.debug(f"Downloading source from: {tarball_url}")
+                response = self.session.get(tarball_url)
+                
+                if response.status_code != 200:
+                    raise ValueError(f"Failed to download source code for {name}@{version}")
+                    
+                # Extract archive
+                with tarfile.open(fileobj=io.BytesIO(response.content), mode="r:gz") as tar:
+                    # Get the root directory name from the archive
+                    root_dir = tar.getnames()[0]
+                    logger.debug(f"Extracting from tarball root: {root_dir}")
+                    
+                    # First find and extract package.yml
+                    package_yml_locations = [
+                        "package.yml",
+                        f"{name}/package.yml",
+                        "src/package.yml",
+                        f"src/{name}/package.yml"
+                    ]
+                    
+                    package_yml_found = False
+                    for member in tar.getmembers():
+                        for location in package_yml_locations:
+                            full_path = f"{root_dir}/{location}"
+                            if member.name == full_path:
+                                logger.debug(f"Found package.yml at {location} in tarball")
+                                # Extract package.yml to root of sources dir
+                                member.name = "package.yml"
+                                tar.extract(member, sources_dir)
+                                package_yml_found = True
+                                break
+                        if package_yml_found:
                             break
                             
-            if selected_release:
-                # Download release tarball
-                tarball_url = selected_release["tarball_url"]
-                logger.debug(f"Using release tarball: {tarball_url}")
-            else:
-                logger.info("No matching release found, falling back to tags")
-                
-        # If no release found, try tags
-        if not selected_release:
-            tags_url = f"https://api.github.com/repos/{self.organization}/{name}/tags"
-            response = self.session.get(tags_url)
-            
-            if response.status_code != 200:
-                raise ValueError(f"Failed to get versions for {name}: {response.text}")
-                
-            tags = response.json()
-            
-            if tags:
-                tag_names = [t['name'] for t in tags]
-                logger.info(f"Found tags: {tag_names}")
-                if version == "latest":
-                    # Use first tag (most recent)
-                    tag = tags[0]
-                    version = tag["name"].lstrip("v")
-                    logger.info(f"Using latest tag: {version}")
-                    tarball_url = f"https://api.github.com/repos/{self.organization}/{name}/tarball/{tag['name']}"
-                else:
-                    # Find matching tag
-                    for tag in tags:
-                        if tag["name"].lstrip("v") == version:
-                            logger.info(f"Found matching tag: {tag['name']}")
-                            tarball_url = f"https://api.github.com/repos/{self.organization}/{name}/tarball/{tag['name']}"
-                            break
-                    else:
-                        raise ValueError(f"Version {version} not found in tags")
-            elif version == "latest":
-                # No tags, fall back to main branch
-                logger.info("No tags found, falling back to main branch")
-                tarball_url = f"https://api.github.com/repos/{self.organization}/{name}/tarball/main"
-                version = "main"
-            else:
-                raise ValueError(f"No versions found for package {name}")
-                
-        # Create package directory under ~/.clyde/sources
-        sources_dir = Path.home() / ".clyde" / "sources" / self.organization / name / version
-        sources_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Download source code if not already downloaded
-        package_yml = sources_dir / "package.yml"
-        if not package_yml.exists():
-            logger.debug(f"Downloading source from: {tarball_url}")
-            response = self.session.get(tarball_url)
-            
-            if response.status_code != 200:
-                raise ValueError(f"Failed to download source code for {name}@{version}")
-                
-            # Extract archive
-            with tarfile.open(fileobj=io.BytesIO(response.content), mode="r:gz") as tar:
-                # Get the root directory name from the archive
-                root_dir = tar.getnames()[0]
-                logger.debug(f"Extracting from tarball root: {root_dir}")
-                
-                # First find and extract package.yml
-                package_yml_locations = [
-                    "package.yml",
-                    f"{name}/package.yml",
-                    "src/package.yml",
-                    f"src/{name}/package.yml"
-                ]
-                
-                package_yml_found = False
-                for member in tar.getmembers():
-                    for location in package_yml_locations:
-                        full_path = f"{root_dir}/{location}"
-                        if member.name == full_path:
-                            logger.debug(f"Found package.yml at {location} in tarball")
-                            # Extract package.yml to root of sources dir
-                            member.name = "package.yml"
-                            tar.extract(member, sources_dir)
-                            package_yml_found = True
-                            break
-                    if package_yml_found:
-                        break
-                        
-                if not package_yml_found:
-                    raise ValueError(
-                        f"No package.yml found in {version} of {self.organization}/{name}. "
-                        "This version may not be properly packaged for Clyde. "
-                        "Make sure package.yml is included in releases/tags."
-                    )
-                
-                # Now extract everything else
-                for member in tar.getmembers():
-                    if member.name == f"{root_dir}/package.yml":
-                        continue
-                    # Remove root directory from path
-                    member.name = member.name.replace(f"{root_dir}/", "", 1)
-                    tar.extract(member, sources_dir)
+                    if not package_yml_found:
+                        raise ValueError(
+                            f"No package.yml found in {version} of {self.organization}/{name}. "
+                            "This version may not be properly packaged for Clyde. "
+                            "Make sure package.yml is included in releases/tags."
+                        )
                     
-        # Create package instance from sources directory
-        return Package(sources_dir)
+                    # Now extract everything else
+                    for member in tar.getmembers():
+                        if member.name == f"{root_dir}/package.yml":
+                            continue
+                        # Remove root directory from path
+                        member.name = member.name.replace(f"{root_dir}/", "", 1)
+                        tar.extract(member, sources_dir)
+                    
+            # Create package instance from sources directory
+            return Package(sources_dir)
+        except Exception as e:
+            logger.error("Failed to get package: %s", e)
+            raise ValueError(f"Failed to get package {name}@{version}: {e}")
 
     def create_repo(self, package_name: str, private: bool = False) -> Repository.Repository:
         """Create a new GitHub repository for the package.
@@ -225,7 +215,7 @@ class GitHubRegistry:
             logger.error("Failed to create repository %s: %s", package_name, e)
             raise ValueError(f"Failed to create repository {package_name}: {e}")
 
-    def _get_repo(self, package_name: str) -> Repository.Repository:
+    def _get_repo(self, package_name: str) -> Dict:
         """Get GitHub repository for package, creating it if it doesn't exist.
         Also ensures local git remote is configured correctly.
         """
@@ -235,26 +225,55 @@ class GitHubRegistry:
             
             # Try both org and user contexts to find the repo
             repo = None
+            
+            # If organization is specified, try that first
             if self.organization:
-                try:
-                    repo = self.session.get(f"https://api.github.com/repos/{self.organization}/{package_name}").json()
+                response = self.session.get(f"https://api.github.com/repos/{self.organization}/{package_name}")
+                if response.status_code == 200:
+                    repo = response.json()
                     logger.debug("Found repository in organization %s", self.organization)
-                except GithubException as e:
-                    if e.status != 404:  # Only ignore 404 Not Found
-                        raise
-                
+            
+            # If no org or repo not found in org, try user's repos
             if not repo:
-                try:
-                    repo = self.session.get(f"https://api.github.com/user/repos").json()[0]
+                # First get the authenticated user
+                user_response = self.session.get("https://api.github.com/user")
+                if user_response.status_code != 200:
+                    raise ValueError("Failed to get authenticated user. Please check your GitHub token.")
+                
+                user = user_response.json()
+                username = user['login']
+                
+                # Try to find repo in user's account
+                response = self.session.get(f"https://api.github.com/repos/{username}/{package_name}")
+                if response.status_code == 200:
+                    repo = response.json()
+                    # If no organization was specified, use the username
+                    if not self.organization:
+                        self.organization = username
                     logger.debug("Found repository in user account")
-                except GithubException as e:
-                    if e.status != 404:  # Only ignore 404 Not Found
-                        raise
                 
             # If repo still not found, create it
             if not repo:
                 logger.warning("Repository %s not found, will create it", package_name)
-                repo = self.create_repo(package_name)
+                # Create in organization if specified, otherwise in user account
+                if self.organization:
+                    create_url = f"https://api.github.com/orgs/{self.organization}/repos"
+                else:
+                    create_url = "https://api.github.com/user/repos"
+                    
+                create_data = {
+                    "name": package_name,
+                    "private": False,
+                    "auto_init": False
+                }
+                
+                response = self.session.post(create_url, json=create_data)
+                if response.status_code != 201:
+                    raise ValueError(f"Failed to create repository: {response.text}")
+                
+                repo = response.json()
+                if not self.organization:
+                    self.organization = repo['owner']['login']
             
             # Check local git repo and remote
             try:
@@ -266,10 +285,7 @@ class GitHubRegistry:
                     current_url = origin.url
                     
                     # Construct expected SSH URL
-                    if self.organization:
-                        expected_url = f"git@github.com:{self.organization}/{package_name}.git"
-                    else:
-                        expected_url = f"git@github.com:{repo['owner']['login']}/{package_name}.git"
+                    expected_url = f"git@github.com:{self.organization}/{package_name}.git"
                         
                     if current_url != expected_url:
                         logger.info("Updating remote URL from %s to %s", current_url, expected_url)
@@ -277,10 +293,7 @@ class GitHubRegistry:
                 except ValueError:
                     # Remote doesn't exist, create it
                     logger.info("Creating origin remote")
-                    if self.organization:
-                        url = f"git@github.com:{self.organization}/{package_name}.git"
-                    else:
-                        url = f"git@github.com:{repo['owner']['login']}/{package_name}.git"
+                    url = f"git@github.com:{self.organization}/{package_name}.git"
                     git_repo.create_remote("origin", url)
                 
             except git.InvalidGitRepositoryError:
@@ -288,7 +301,7 @@ class GitHubRegistry:
             
             return repo
         
-        except GithubException as e:
+        except Exception as e:
             logger.error("Failed to get/create repository %s: %s", package_name, e)
             raise ValueError(f"Failed to access repository {package_name}: {e}")
             
@@ -341,28 +354,33 @@ class GitHubRegistry:
         Creates a new release with source package and optionally binary package.
         """
         logger.debug("Publishing package %s version %s", package.name, package.version)
+        
+        # Get repo will ensure we have the correct organization
         repo = self._get_repo(package.name)
+        owner = repo['owner']['login']
 
         # Check if release already exists
         try:
-            existing_release = repo.get_release(f"v{package.version}")
-            logger.error("Version %s already exists", package.version)
-            raise ValueError(
-                f"\n[red]Error: Version {package.version} already exists[/red]\n\n"
-                f"To publish a new version:\n"
-                f"1. Update the version in [bold]package.yml[/bold]:\n"
-                f"   version: {package.version}\n"
-                f"2. Commit and tag the changes:\n"
-                f"   git commit -am 'Release {package.version}'\n"
-                f"   git tag v{package.version}\n"
-                f"3. Push to GitHub:\n"
-                f"   git push origin main --tags\n"
-                f"4. Publish the package:\n"
-                f"   clyde publish\n"
-                f"The existing release can be found at: {existing_release.html_url}"
-            )
-        except GithubException as e:
-            if e.status != 404:  # Only ignore 404 Not Found
+            response = self.session.get(f"https://api.github.com/repos/{owner}/{package.name}/releases/tags/v{package.version}")
+            if response.status_code == 200:
+                existing_release = response.json()
+                logger.error("Version %s already exists", package.version)
+                raise ValueError(
+                    f"\n[red]Error: Version {package.version} already exists[/red]\n\n"
+                    f"To publish a new version:\n"
+                    f"1. Update the version in [bold]package.yml[/bold]:\n"
+                    f"   version: {package.version}\n"
+                    f"2. Commit and tag the changes:\n"
+                    f"   git commit -am 'Release {package.version}'\n"
+                    f"   git tag v{package.version}\n"
+                    f"3. Push to GitHub:\n"
+                    f"   git push origin main --tags\n"
+                    f"4. Publish the package:\n"
+                    f"   clyde publish\n"
+                    f"The existing release can be found at: {existing_release['html_url']}"
+                )
+        except requests.exceptions.RequestException as e:
+            if e.response and e.response.status_code != 404:
                 raise ValueError(f"Failed to check existing release: {e}")
 
         # Create source tarball
@@ -387,21 +405,34 @@ class GitHubRegistry:
                 tar.add(package.path, arcname=package.name, filter=filter_func)
         
             try:
-                # Create release
+                # Create release using GitHub API
                 logger.debug("Creating release v%s", package.version)
-                release = repo.create_git_release(
-                    f"v{package.version}",
-                    f"Release {package.version}",
-                    f"Release {package.version} of {package.name}"
+                release_data = {
+                    "tag_name": f"v{package.version}",
+                    "name": f"Release {package.version}",
+                    "body": f"Release {package.version} of {package.name}",
+                    "draft": False,
+                    "prerelease": False
+                }
+                response = self.session.post(
+                    f"https://api.github.com/repos/{owner}/{package.name}/releases",
+                    json=release_data
                 )
+                response.raise_for_status()
+                release = response.json()
                 
                 # Upload source package
                 logger.debug("Uploading source package %s", tarball_path)
-                release.upload_asset(
-                    str(tarball_path),
-                    f"{package.name}-{package.version}.tar.gz",
-                    "application/gzip"
-                )
+                with open(tarball_path, "rb") as f:
+                    files = {
+                        "file": (f"{package.name}-{package.version}.tar.gz", f, "application/gzip")
+                    }
+                    response = self.session.post(
+                        release["upload_url"].replace("{?name,label}", ""),
+                        files=files,
+                        params={"name": f"{package.name}-{package.version}.tar.gz"}
+                    )
+                    response.raise_for_status()
                 
                 # Create and upload binary if requested
                 if create_binary and package.form == "source":
@@ -409,12 +440,27 @@ class GitHubRegistry:
                     binary_path = self._create_binary(package)
                     if binary_path:
                         logger.debug("Uploading binary package %s", binary_path)
-                        release.upload_asset(
-                            str(binary_path),
-                            f"{package.name}-{package.version}-{package.build_metadata.get_hash()}.tar.gz",
-                            "application/gzip"
-                        )
-            except GithubException as e:
+                        with open(binary_path, "rb") as f:
+                            files = {
+                                "file": (
+                                    f"{package.name}-{package.version}-{package.build_metadata.get_hash()}.tar.gz",
+                                    f,
+                                    "application/gzip"
+                                )
+                            }
+                            response = self.session.post(
+                                release["upload_url"].replace("{?name,label}", ""),
+                                files=files,
+                                params={
+                                    "name": f"{package.name}-{package.version}-{package.build_metadata.get_hash()}.tar.gz"
+                                }
+                            )
+                            response.raise_for_status()
+                            
+                logger.info("Successfully published %s version %s", package.name, package.version)
+                console.print(f"\n[green]✓[/green] Published {package.name} {package.version}")
+                
+            except requests.exceptions.RequestException as e:
                 if "already_exists" in str(e):
                     logger.error("Version %s already exists", package.version)
                     raise ValueError(
@@ -442,17 +488,22 @@ class GitHubRegistry:
     def get_versions(self, name: str) -> List[Version]:
         """Get available versions for package."""
         logger.debug("Getting versions for package %s", name)
-        repo = self._get_repo(name)
-        versions = []
-        for release in repo.get_releases():
-            if release.tag_name.startswith("v"):
+        try:
+            repo = self._get_repo(name)
+            versions = []
+            for release in repo.get_releases():
                 try:
-                    versions.append(Version(release.tag_name[1:]))
+                    # Strip 'v' prefix if present and parse as Version
+                    version_str = release.tag_name.lstrip("v")
+                    versions.append(Version.parse(version_str))
                 except ValueError:
                     logger.warning("Invalid version tag: %s", release.tag_name)
                     continue
-        logger.debug("Found versions: %s", versions)
-        return sorted(versions)
+            logger.debug("Found versions: %s", versions)
+            return sorted(versions)  # Version class implements proper comparison
+        except Exception as e:
+            logger.error("Failed to get versions: %s", e)
+            return []
 
     def _print_publish_instructions(self, package: Package) -> None:
         """Print instructions for publishing a package."""

@@ -15,9 +15,10 @@ from .cache import BuildCache
 
 logger = logging.getLogger(__name__)
 
-# Set up build log file handler
+# Set up build log file handler - only log to file by default
 build_logger = logging.getLogger("build")
-build_logger.setLevel(logging.DEBUG)
+build_logger.setLevel(logging.DEBUG)  # Always log everything to file
+build_logger.propagate = False  # Prevent propagation to root logger
 build_file_handler = logging.FileHandler("build.log", mode='w')
 build_file_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
 build_logger.addHandler(build_file_handler)
@@ -159,8 +160,7 @@ class Builder:
         # Check if we have a cached object file
         if self.cache.has_cached_object(source_path, build_metadata):
             if self.cache.get_cached_object(source_path, build_metadata, object_path):
-                logger.debug("Using cached object for %s", source_path)
-                build_logger.info("[CACHE] Using cached object for %s", source_path)
+                logger.debug("[CACHE] Using cached object for %s", source_path)
                 return None
                 
         # Build command - use g++ for .cpp files
@@ -188,7 +188,7 @@ class Builder:
         context.command = cmd
         
         # Log the compilation command
-        build_logger.info("[COMPILE] %s", " ".join(cmd))
+        build_logger.debug("[COMPILE] %s", " ".join(cmd))
         
         if verbose:
             logger.info("Compiling %s -> %s", rel_source, object_path)
@@ -205,7 +205,7 @@ class Builder:
             
             # Log compiler output if any
             if result.stdout:
-                build_logger.info("[COMPILER OUTPUT]\n%s", result.stdout)
+                build_logger.debug("[COMPILER OUTPUT]\n%s", result.stdout)
             
             # Cache the successful compilation
             self.cache.cache_object(source_path, object_path, build_metadata)
@@ -262,7 +262,7 @@ class Builder:
             context.command = cmd
             
             # Log the library creation command
-            build_logger.info("[ARCHIVE] %s", " ".join(cmd))
+            build_logger.debug("[ARCHIVE] %s", " ".join(cmd))
             
             if verbose:
                 logger.info("Creating library %s", output_path)
@@ -311,7 +311,7 @@ class Builder:
             context.command = cmd
             
             # Log the linking command
-            build_logger.info("[LINK] %s", " ".join(cmd))
+            build_logger.debug("[LINK] %s", " ".join(cmd))
             
             if verbose:
                 logger.info("Linking %s", output_path)
@@ -328,7 +328,7 @@ class Builder:
                 
                 # Log linker output if any
                 if result.stdout:
-                    build_logger.info("[LINKER OUTPUT]\n%s", result.stdout)
+                    build_logger.debug("[LINKER OUTPUT]\n%s", result.stdout)
                     
                 # Run post-link hooks
                 self.hook_manager.run_hooks(BuildStage.POST_LINK, context)
@@ -352,7 +352,7 @@ class Builder:
         """
         # Build all dependencies (both local and remote)
         for dep in package.get_all_dependencies():
-            build_logger.info("[DEPENDENCY] Building %s %s", dep.name, dep.version)
+            build_logger.debug("[DEPENDENCY] Building %s %s", dep.name, dep.version)
             result = self.build(dep, traits, verbose)
             if not result.success:
                 error_msg = f"Failed to build dependency {dep.name}: {result.error}"

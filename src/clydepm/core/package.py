@@ -8,7 +8,9 @@ from typing import Dict, List, Optional, Set, Tuple
 import hashlib
 import json
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
+from .version.version import Version
+from .config.schema import PackageConfig
 
 
 class PackageType(str, Enum):
@@ -85,6 +87,12 @@ class Package:
         self._config = self._load_config()
         self._traits = {}  # Initialize traits dictionary
         
+        # Validate config using schema
+        try:
+            self._validated_config = PackageConfig(**self._config)
+        except ValidationError as e:
+            raise ValueError(f"Invalid package.yml configuration:\n{e}")
+        
         # Handle package type from config
         config_type = self._config.get("type", "library")
         try:
@@ -118,30 +126,54 @@ class Package:
         # Ensure we save only simple types
         config["type"] = self.package_type.value
         
+        # Validate before saving
+        try:
+            PackageConfig(**config)
+        except ValidationError as e:
+            raise ValueError(f"Invalid package configuration:\n{e}")
+        
         with open(self.path / "package.yml", "w") as f:
             yaml.dump(config, f, sort_keys=False, default_flow_style=False)
     
     @property
     def name(self) -> str:
         """Get package name."""
-        return self._config["name"]
+        return self._validated_config.name
     
     @property
     def version(self) -> str:
         """Get package version."""
-        return self._config["version"]
+        return self._validated_config.version
+    
+    def get_version_object(self) -> Version:
+        """Get package version as Version object."""
+        return Version.parse(self.version)
+    
+    def is_compatible_with(self, other_version: str) -> bool:
+        """Check if this package version is compatible with another version.
+        
+        Args:
+            other_version: Version string to check compatibility with
+            
+        Returns:
+            True if versions are compatible according to SemVer rules
+        """
+        try:
+            other = Version.parse(other_version)
+            return self.get_version_object().is_compatible_with(other)
+        except ValueError:
+            return False
     
     def get_dependencies(self) -> Dict[str, str]:
         """Get package dependencies with version specs."""
         deps = {}
-        if "requires" in self._config and self._config["requires"]:
-            deps.update(self._config["requires"])
+        if self._validated_config.requires:
+            deps.update(self._validated_config.requires)
             
         # Handle variant-specific dependencies
-        for variant in self._config.get("variants", []):
-            for variant_name, variant_config in variant.items():
-                if "requires" in variant_config and variant_config["requires"]:
-                    deps.update(variant_config["requires"])
+        for variant in self._validated_config.variants.values():
+            if "requires" in variant and variant["requires"]:
+                deps.update(variant["requires"])
                     
         return deps
 
@@ -240,7 +272,7 @@ class Package:
             sources.extend(src_dir.glob("*.cpp"))
             
         # Get sources from variants
-        for variant in self._config.get("variants", []):
+        for variant in self._validated_config.variants.values():
             variant_dir = self.path / list(variant.keys())[0]
             if variant_dir.exists():
                 sources.extend(variant_dir.glob("*.c"))
@@ -268,20 +300,18 @@ class Package:
         cflags = []
         
         # Get global cflags
-        if "cflags" in self._config:
-            if "gcc" in self._config["cflags"]:
-                cflags.extend(self._config["cflags"]["gcc"].split())
-            if "g++" in self._config["cflags"]:
-                cflags.extend(self._config["cflags"]["g++"].split())
+        if "cflags" in self._validated_config and "gcc" in self._validated_config["cflags"]:
+            cflags.extend(self._validated_config["cflags"]["gcc"].split())
+        if "g++" in self._validated_config and "cflags" in self._validated_config["cflags"]:
+            cflags.extend(self._validated_config["cflags"]["g++"].split())
             
         # Get variant-specific cflags
-        for variant in self._config.get("variants", []):
+        for variant in self._validated_config.variants.values():
             for variant_config in variant.values():
-                if "cflags" in variant_config:
-                    if "gcc" in variant_config["cflags"]:
-                        cflags.extend(variant_config["cflags"]["gcc"].split())
-                    if "g++" in variant_config["cflags"]:
-                        cflags.extend(variant_config["cflags"]["g++"].split())
+                if "cflags" in variant_config and "gcc" in variant_config["cflags"]:
+                    cflags.extend(variant_config["cflags"]["gcc"].split())
+                if "g++" in variant_config and "cflags" in variant_config["cflags"]:
+                    cflags.extend(variant_config["cflags"]["g++"].split())
                     
         return cflags
 
@@ -290,20 +320,18 @@ class Package:
         ldflags = []
         
         # Get global ldflags
-        if "ldflags" in self._config:
-            if "gcc" in self._config["ldflags"]:
-                ldflags.extend(self._config["ldflags"]["gcc"].split())
-            if "g++" in self._config["ldflags"]:
-                ldflags.extend(self._config["ldflags"]["g++"].split())
+        if "ldflags" in self._validated_config and "gcc" in self._validated_config["ldflags"]:
+            ldflags.extend(self._validated_config["ldflags"]["gcc"].split())
+        if "g++" in self._validated_config and "ldflags" in self._validated_config["ldflags"]:
+            ldflags.extend(self._validated_config["ldflags"]["g++"].split())
             
         # Get variant-specific ldflags
-        for variant in self._config.get("variants", []):
+        for variant in self._validated_config.variants.values():
             for variant_config in variant.values():
-                if "ldflags" in variant_config:
-                    if "gcc" in variant_config["ldflags"]:
-                        ldflags.extend(variant_config["ldflags"]["gcc"].split())
-                    if "g++" in variant_config["ldflags"]:
-                        ldflags.extend(variant_config["ldflags"]["g++"].split())
+                if "ldflags" in variant_config and "gcc" in variant_config["ldflags"]:
+                    ldflags.extend(variant_config["ldflags"]["gcc"].split())
+                if "g++" in variant_config and "ldflags" in variant_config["ldflags"]:
+                    ldflags.extend(variant_config["ldflags"]["g++"].split())
         
         # Add dependency ldflags
         _, dep_flags = self.get_all_dependency_libs()
@@ -342,7 +370,7 @@ class Package:
     
     def _get_traits(self) -> Dict[str, str]:
         """Get package traits."""
-        traits = self._config.get("traits", {}).copy()
+        traits = self._validated_config.traits.copy()
         traits.update(self._traits)  # Instance traits override config traits
         return traits
 
