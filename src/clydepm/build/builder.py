@@ -175,11 +175,14 @@ class Builder:
         # Add include paths, making them relative when possible
         for include_path in build_metadata.includes:
             try:
-                rel_include = os.path.relpath(include_path)
-                cmd.extend(["-I", rel_include])
+                # Only add the base include directory, not package-specific subdirs
+                if include_path.name == "include":
+                    rel_include = os.path.relpath(include_path)
+                    cmd.extend(["-I", rel_include])
             except ValueError:
                 # Path is on different drive/root, use absolute
-                cmd.extend(["-I", str(include_path)])
+                if include_path.name == "include":
+                    cmd.extend(["-I", str(include_path)])
         
         # Update context with command
         context.command = cmd
