@@ -77,4 +77,68 @@
 
 .react-flow__controls button:hover {
     background: #f8f9fa;
+}
+
+.graph-container {
+    position: relative;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.graph-error {
+    padding: 20px;
+    color: #c5221f;
+    background: #fce8e6;
+    border-radius: 4px;
+    margin: 20px 0;
+}
+
+.graph-loading {
+    padding: 20px;
+    color: #666;
+    text-align: center;
+    font-style: italic;
+}
+
+/* Force Graph Styles */
+.force-graph-container {
+    background: #fff !important;
+}
+
+.force-graph-container canvas {
+    border-radius: 4px;
+}
+
+/* Node hover tooltip */
+.force-graph-container .graph-tooltip {
+    padding: 8px 12px;
+    font-size: 12px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    border-radius: 4px;
+    pointer-events: none;
+}
+
+/* Loading state */
+.graph-loading::after {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-left: 8px;
+    border: 2px solid #666;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 } 

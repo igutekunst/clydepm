@@ -1,39 +1,81 @@
 .app {
+    min-height: 100vh;
+    background: #f8f9fa;
     display: flex;
-    flex-direction: column;
-    height: 100vh;
-    background: #f5f7fa;
+}
+
+.main-content {
+    flex: 1;
+    margin-left: 300px; /* Match sidebar width */
+    min-height: 100vh;
+    background: #fff;
 }
 
 .app-header {
-    background: white;
-    padding: 1rem 2rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    z-index: 10;
+    padding: 20px;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
 }
 
 .app-header h1 {
     margin: 0;
-    font-size: 1.5rem;
-    color: #1a1a1a;
+    font-size: 1.5em;
+    color: #333;
 }
 
 .app-content {
+    padding: 20px;
+}
+
+.error-message {
+    padding: 12px;
+    margin-bottom: 20px;
+    background: #fce8e6;
+    color: #c5221f;
+    border-radius: 4px;
+}
+
+.content-grid {
     display: grid;
-    grid-template-columns: 1fr 400px;
-    gap: 0;
-    height: calc(100vh - 64px); /* Account for header */
-    overflow: hidden;
+    grid-template-columns: 1fr;
+    gap: 20px;
+}
+
+.build-panel {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.graph-panel {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+}
+
+.graph-panel h2 {
+    margin: 0 0 20px 0;
+    font-size: 1.2em;
+    color: #333;
 }
 
 .graph-container {
-    position: relative;
+    height: 500px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
     overflow: hidden;
-    background: #fafafa;
+    margin-bottom: 20px;
 }
 
-.inspector-container {
-    border-left: 1px solid #e0e0e0;
-    background: white;
-    overflow-y: auto;
+.details-panel {
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+@media (min-width: 1200px) {
+    .content-grid {
+        grid-template-columns: 1fr 1fr;
+    }
 } 

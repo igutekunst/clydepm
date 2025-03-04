@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime, timezone
+import json
+import glob
 
 from .models import (
     DependencyNode,
@@ -19,7 +21,9 @@ from .models import (
     IncludePath,
     IncludePathType,
     SourceFile,
-    CompilerCommand
+    CompilerCommand,
+    BuildData,
+    CompilationStep
 )
 
 app = FastAPI(
@@ -39,6 +43,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Build data directory
+BUILD_DATA_DIR = Path.home() / ".clydepm" / "build_data"
 
 def generate_example_source_tree(name: str) -> SourceTree:
     return SourceTree(
@@ -334,6 +341,109 @@ async def get_file_info(file_path: str) -> SourceFile:
         )
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+@app.get("/api/builds", response_model=List[BuildData])
+async def get_all_builds() -> List[BuildData]:
+    """Get all build data."""
+    try:
+        build_files = glob.glob(str(BUILD_DATA_DIR / "build_*.json"))
+        builds = []
+        for file in build_files:
+            with open(file) as f:
+                data = json.load(f)
+                # Transform the data to match BuildData model
+                build_data = {
+                    "package_name": data["package"]["name"],
+                    "package_version": data["package"]["version"],
+                    "start_time": data["timing"]["start"],
+                    "end_time": data["timing"]["end"] if "end" in data["timing"] else None,
+                    "compiler_info": {
+                        "name": data["compiler"]["name"],
+                        "version": data["compiler"]["version"],
+                        "target": data["compiler"]["target"]
+                    },
+                    "compilation_steps": [
+                        {
+                            "source_file": step["source"],
+                            "object_file": step["object"],
+                            "command": step["command"].split() if step["command"] else [],
+                            "include_paths": step["include_paths"],
+                            "start_time": step["timing"]["start"],
+                            "end_time": step["timing"]["end"] if "end" in step["timing"] else None,
+                            "success": step["success"],
+                            "error": step["error"]
+                        }
+                        for step in data["compilation_steps"]
+                    ],
+                    "dependencies": data.get("dependencies", {}),
+                    "dependency_graph": data.get("dependency_graph", {}),
+                    "include_paths": data.get("include_paths", []),
+                    "library_paths": data.get("library_paths", []),
+                    "success": all(step["success"] for step in data["compilation_steps"]),
+                    "error": None  # We'll add error handling later if needed
+                }
+                builds.append(BuildData(**build_data))
+        return sorted(builds, key=lambda x: x.start_time, reverse=True)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/builds/{package_name}", response_model=List[BuildData])
+async def get_package_builds(package_name: str) -> List[BuildData]:
+    """Get all builds for a specific package."""
+    try:
+        build_files = glob.glob(str(BUILD_DATA_DIR / f"build_{package_name}_*.json"))
+        builds = []
+        for file in build_files:
+            with open(file) as f:
+                data = json.load(f)
+                # Transform the data to match BuildData model
+                build_data = {
+                    "package_name": data["package"]["name"],
+                    "package_version": data["package"]["version"],
+                    "start_time": data["timing"]["start"],
+                    "end_time": data["timing"]["end"] if "end" in data["timing"] else None,
+                    "compiler_info": {
+                        "name": data["compiler"]["name"],
+                        "version": data["compiler"]["version"],
+                        "target": data["compiler"]["target"]
+                    },
+                    "compilation_steps": [
+                        {
+                            "source_file": step["source"],
+                            "object_file": step["object"],
+                            "command": step["command"].split() if step["command"] else [],
+                            "include_paths": step["include_paths"],
+                            "start_time": step["timing"]["start"],
+                            "end_time": step["timing"]["end"] if "end" in step["timing"] else None,
+                            "success": step["success"],
+                            "error": step["error"]
+                        }
+                        for step in data["compilation_steps"]
+                    ],
+                    "dependencies": data.get("dependencies", {}),
+                    "dependency_graph": data.get("dependency_graph", {}),
+                    "include_paths": data.get("include_paths", []),
+                    "library_paths": data.get("library_paths", []),
+                    "success": all(step["success"] for step in data["compilation_steps"]),
+                    "error": None  # We'll add error handling later if needed
+                }
+                builds.append(BuildData(**build_data))
+        return sorted(builds, key=lambda x: x.start_time, reverse=True)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/builds/{package_name}/latest", response_model=BuildData)
+async def get_latest_package_build(package_name: str) -> BuildData:
+    """Get the latest build for a specific package."""
+    try:
+        builds = await get_package_builds(package_name)
+        if not builds:
+            raise HTTPException(status_code=404, detail=f"No builds found for package {package_name}")
+        return builds[0]  # Already sorted by start_time
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Serve frontend in production
 frontend_path = Path(__file__).parent / "frontend" / "dist"

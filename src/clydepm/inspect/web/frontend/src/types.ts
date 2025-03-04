@@ -118,4 +118,34 @@ export interface GraphSettings {
             nodeDistance: number;
         };
     };
+}
+
+export interface CompilationStep {
+    source_file: string;
+    object_file: string;
+    command: string[];
+    include_paths: string[];
+    start_time: string;
+    end_time?: string;
+    success: boolean;
+    error?: string;
+}
+
+export interface BuildData {
+    package_name: string;
+    package_version: string;
+    start_time: string;
+    compiler_info: {
+        name: string;
+        version: string;
+        target: string;
+    };
+    compilation_steps: CompilationStep[];
+    dependencies: { [key: string]: string };
+    dependency_graph: { [key: string]: string[] };
+    include_paths: string[];
+    library_paths: string[];
+    end_time?: string;
+    success: boolean;
+    error?: string;
 } 

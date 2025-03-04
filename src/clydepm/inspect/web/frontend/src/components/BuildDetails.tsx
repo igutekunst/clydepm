@@ -1,86 +1,126 @@
 import React from 'react';
-import type { SourceFile } from '../types';
+import { BuildData } from '../types';
+import { formatDuration, formatDateTime } from '../utils/time';
 
 interface BuildDetailsProps {
-    file: SourceFile;
+    build: BuildData;
 }
 
-export const BuildDetails: React.FC<BuildDetailsProps> = ({ file }) => {
+export function BuildDetails({ build }: BuildDetailsProps) {
+    const duration = build.end_time 
+        ? formatDuration(new Date(build.start_time), new Date(build.end_time))
+        : 'In progress';
+
     return (
         <div className="build-details">
-            <h3>{file.path}</h3>
-            
-            <div className="file-info">
-                <div className="info-item">
-                    <label>Type:</label>
-                    <span>{file.type}</span>
-                </div>
-                <div className="info-item">
-                    <label>Size:</label>
-                    <span>{(file.size / 1024).toFixed(2)} KB</span>
-                </div>
-                {file.objectSize && (
-                    <div className="info-item">
-                        <label>Object Size:</label>
-                        <span>{(file.objectSize / 1024).toFixed(2)} KB</span>
+            <h2>Build Details</h2>
+            <div className="build-header">
+                <div>
+                    <h3>{build.package_name} {build.package_version}</h3>
+                    <div className={`build-status ${build.success ? 'success' : 'error'}`}>
+                        {build.success ? 'Success' : 'Failed'}
                     </div>
-                )}
+                </div>
+                <div className="build-timing">
+                    <div>Started: {formatDateTime(new Date(build.start_time))}</div>
+                    <div>Duration: {duration}</div>
+                </div>
             </div>
 
-            {file.compilerCommand && (
+            {build.compiler_info && (
                 <div className="compiler-info">
-                    <h4>Compiler Command</h4>
-                    <pre className="command-line">{file.compilerCommand.commandLine}</pre>
-                    
-                    <div className="compilation-stats">
-                        <div className="stat">
-                            <label>Duration:</label>
-                            <span>{file.compilerCommand.durationMs.toFixed(2)}ms</span>
-                        </div>
-                        <div className="stat">
-                            <label>Cache:</label>
-                            <span className={file.compilerCommand.cacheHit ? 'hit' : 'miss'}>
-                                {file.compilerCommand.cacheHit ? 'HIT' : 'MISS'}
-                            </span>
-                        </div>
-                    </div>
+                    <h3>Compiler Information</h3>
+                    <div>Name: {build.compiler_info.name}</div>
+                    <div>Version: {build.compiler_info.version}</div>
+                    <div>Target: {build.compiler_info.target}</div>
                 </div>
             )}
 
-            {file.warnings.length > 0 && (
-                <div className="warnings">
-                    <h4>Warnings</h4>
-                    {file.warnings.map((warning, index) => (
-                        <div key={index} className={`warning ${warning.level}`}>
-                            <div className="warning-header">
-                                <span className="location">{warning.line}:{warning.column}</span>
-                                {warning.flag && <span className="flag">{warning.flag}</span>}
+            {build.include_paths && build.include_paths.length > 0 && (
+                <div className="build-paths">
+                    <h3>Build Paths</h3>
+                    <div className="include-paths">
+                        <h4>Include Paths</h4>
+                        <ul>
+                            {build.include_paths.map((path, i) => (
+                                <li key={i}>{path}</li>
+                            ))}
+                        </ul>
+                    </div>
+                    {build.library_paths && build.library_paths.length > 0 && (
+                        <div className="library-paths">
+                            <h4>Library Paths</h4>
+                            <ul>
+                                {build.library_paths.map((path, i) => (
+                                    <li key={i}>{path}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {build.dependencies && Object.keys(build.dependencies).length > 0 && (
+                <div className="dependencies">
+                    <h3>Dependencies</h3>
+                    <ul>
+                        {Object.entries(build.dependencies).map(([name, version]) => (
+                            <li key={name}>{name} @ {version}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {build.compilation_steps && build.compilation_steps.length > 0 && (
+                <div className="compilation-steps">
+                    <h3>Compilation Steps</h3>
+                    {build.compilation_steps.map((step, i) => (
+                        <div key={i} className={`compilation-step ${step.success ? 'success' : 'error'}`}>
+                            <div className="step-header">
+                                <div className="step-files">
+                                    <div>Source: {step.source_file}</div>
+                                    <div>Object: {step.object_file}</div>
+                                </div>
+                                <div className="step-timing">
+                                    <div>Started: {formatDateTime(new Date(step.start_time))}</div>
+                                    {step.end_time && (
+                                        <div>
+                                            Duration: {formatDuration(new Date(step.start_time), new Date(step.end_time))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                            <div className="message">{warning.message}</div>
+                            {step.error && (
+                                <div className="step-error">
+                                    {step.error}
+                                </div>
+                            )}
+                            {step.command && step.command.length > 0 && (
+                                <div className="step-command">
+                                    <code>{step.command.join(' ')}</code>
+                                </div>
+                            )}
+                            {step.include_paths && step.include_paths.length > 0 && (
+                                <div className="step-includes">
+                                    <h4>Include Paths:</h4>
+                                    <ul>
+                                        {step.include_paths.map((path, j) => (
+                                            <li key={j}>{path}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>
             )}
 
-            <div className="dependencies">
-                <h4>Dependencies</h4>
-                <div className="includes">
-                    <h5>Includes ({file.includes.length})</h5>
-                    <ul>
-                        {file.includes.map((include, index) => (
-                            <li key={index}>{include}</li>
-                        ))}
-                    </ul>
+            {build.error && (
+                <div className="build-error">
+                    <h3>Build Error</h3>
+                    <pre>{build.error}</pre>
                 </div>
-                <div className="included-by">
-                    <h5>Included By ({file.includedBy.length})</h5>
-                    <ul>
-                        {file.includedBy.map((includer, index) => (
-                            <li key={index}>{includer}</li>
-                        ))}
-                    </ul>
-                </div>
-            </div>
+            )}
         </div>
     );
-}; 
+} 

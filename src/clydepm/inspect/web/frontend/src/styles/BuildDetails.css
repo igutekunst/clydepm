@@ -1,0 +1,202 @@
+.build-details {
+    padding: 20px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.build-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.build-status {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+    margin-top: 8px;
+}
+
+.build-status.success {
+    background-color: #e6f4ea;
+    color: #137333;
+}
+
+.build-status.error {
+    background-color: #fce8e6;
+    color: #c5221f;
+}
+
+.build-timing {
+    text-align: right;
+    color: #666;
+}
+
+.compiler-info {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.build-paths {
+    margin-bottom: 20px;
+}
+
+.build-paths ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.build-paths li {
+    padding: 4px 8px;
+    background: #f8f9fa;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.dependencies ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.dependencies li {
+    padding: 8px;
+    background: #f8f9fa;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.compilation-step {
+    margin-bottom: 20px;
+    padding: 15px;
+    border-radius: 4px;
+    border: 1px solid #e0e0e0;
+    background: #fff;
+}
+
+.compilation-step.success {
+    border-left: 4px solid #137333;
+}
+
+.compilation-step.error {
+    border-left: 4px solid #c5221f;
+}
+
+.step-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.step-files {
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.step-timing {
+    text-align: right;
+    color: #666;
+}
+
+.step-error {
+    margin: 10px 0;
+    padding: 10px;
+    background: #fce8e6;
+    color: #c5221f;
+    border-radius: 4px;
+    font-family: monospace;
+    white-space: pre-wrap;
+}
+
+.step-command {
+    margin: 10px 0;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+.step-command code {
+    font-family: monospace;
+    font-size: 0.9em;
+    white-space: pre-wrap;
+}
+
+.step-includes {
+    margin-top: 10px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.step-includes h4 {
+    margin: 0 0 8px 0;
+    font-size: 0.9em;
+    color: #666;
+}
+
+.step-includes ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.step-includes li {
+    font-family: monospace;
+    font-size: 0.9em;
+    padding: 2px 0;
+    color: #444;
+}
+
+.build-error {
+    margin-top: 20px;
+    padding: 15px;
+    background: #fce8e6;
+    border-radius: 4px;
+}
+
+.build-error pre {
+    margin: 10px 0 0;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+    overflow-x: auto;
+    font-family: monospace;
+    white-space: pre-wrap;
+}
+
+h2, h3, h4 {
+    margin-top: 0;
+    color: #333;
+}
+
+h2 {
+    margin-bottom: 20px;
+}
+
+h3 {
+    margin-bottom: 15px;
+    font-size: 1.2em;
+}
+
+h4 {
+    margin-bottom: 10px;
+    font-size: 1em;
+    color: #666;
+} 

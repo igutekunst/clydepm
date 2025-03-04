@@ -1,163 +1,96 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import ReactFlow, {
-    Node,
-    Edge,
-    Background,
-    Controls,
-    NodeProps,
-    Handle,
-    Position,
-    useReactFlow,
-    ReactFlowProvider,
-    applyNodeChanges,
-    applyEdgeChanges,
-    NodeChange,
-    EdgeChange
-} from 'reactflow';
-import 'reactflow/dist/style.css';
-import { DependencyGraph as DependencyGraphType, GraphSettings } from '../types';
+import React, { useEffect, useState, useCallback } from 'react';
+import ForceGraph2D from 'react-force-graph-2d';
 import { fetchDependencyGraph, fetchGraphSettings } from '../api/client';
-import type { DependencyNode } from '../types';
+import type { DependencyNode, DependencyEdge, GraphSettings } from '../types';
 
 interface DependencyGraphProps {
     onNodeSelect: (node: DependencyNode | null) => void;
 }
 
-interface FlowProps {
-    onNodeSelect: (node: DependencyNode | null) => void;
+interface ForceGraphNode extends DependencyNode {
+    x?: number;
+    y?: number;
 }
 
-const PackageNode: React.FC<NodeProps> = ({ data }) => (
-    <div className={`package-node ${data.is_dev_dep ? 'dev-dep' : ''} ${data.has_warnings ? 'has-warnings' : ''}`}>
-        <Handle type="target" position={Position.Top} />
-        <div className="package-header">
-            <span className="package-name">{data.name}</span>
-            <span className="package-version">{data.version}</span>
-        </div>
-        {data.has_warnings && (
-            <div className="warning-indicator">⚠️</div>
-        )}
-        <Handle type="source" position={Position.Bottom} />
-    </div>
-);
+interface ForceGraphLink extends Omit<DependencyEdge, 'source' | 'target'> {
+    source: ForceGraphNode;
+    target: ForceGraphNode;
+}
 
-const nodeTypes = {
-    package: PackageNode,
-};
+interface GraphData {
+    nodes: ForceGraphNode[];
+    links: ForceGraphLink[];
+}
 
-const Flow = React.memo(({ onNodeSelect }: { onNodeSelect: (node: DependencyNode | null) => void }) => {
-    const [nodes, setNodes] = useState<Node[]>([]);
-    const [edges, setEdges] = useState<Edge[]>([]);
+export function DependencyGraph({ onNodeSelect }: DependencyGraphProps) {
+    const [graphData, setGraphData] = useState<GraphData | null>(null);
     const [settings, setSettings] = useState<GraphSettings | null>(null);
-    const flowWrapper = useRef<HTMLDivElement>(null);
-    const { fitView } = useReactFlow();
-
-    const onNodesChange = useCallback((changes: NodeChange[]) => {
-        setNodes((nds) => applyNodeChanges(changes, nds));
-    }, []);
-
-    const onEdgesChange = useCallback((changes: EdgeChange[]) => {
-        setEdges((eds) => applyEdgeChanges(changes, eds));
-    }, []);
-
-    const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-        console.log('Node clicked in Flow component:', node.data);
-        onNodeSelect(node.data as DependencyNode);
-    }, [onNodeSelect]);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        const loadGraphData = async () => {
+        async function loadGraphData() {
             try {
-                const [graphData, graphSettings] = await Promise.all([
+                const [graph, graphSettings] = await Promise.all([
                     fetchDependencyGraph(),
-                    fetchGraphSettings(),
+                    fetchGraphSettings()
                 ]);
 
-                const flowNodes = graphData.nodes.map((node) => ({
-                    id: node.id,
-                    type: 'package',
-                    position: {
-                        x: node.position.x * 200,
-                        y: node.position.y * 200
-                    },
-                    draggable: true,
-                    data: node,
-                }));
-
-                const flowEdges = graphData.edges.map((edge) => ({
-                    id: edge.id,
-                    source: edge.source,
-                    target: edge.target,
-                    type: edge.is_circular ? 'smoothstep' : 'default',
-                    animated: edge.is_circular,
-                    style: {
-                        stroke: edge.is_circular ? '#ff0000' : '#888',
-                        strokeWidth: 2,
-                    },
-                }));
-
-                setNodes(flowNodes);
-                setEdges(flowEdges);
+                // Create a map of nodes by ID for quick lookup
+                const nodesMap = new Map(graph.nodes.map(node => [node.id, { ...node }]));
+                
+                // Create the graph data structure that ForceGraph2D expects
+                const graphData: GraphData = {
+                    nodes: Array.from(nodesMap.values()),
+                    links: graph.edges.map(edge => ({
+                        ...edge,
+                        source: nodesMap.get(edge.source)!,
+                        target: nodesMap.get(edge.target)!
+                    }))
+                };
+                
+                setGraphData(graphData);
                 setSettings(graphSettings);
-
-            } catch (error) {
-                console.error('Failed to load graph data:', error);
+            } catch (e) {
+                setError(e instanceof Error ? e.message : 'Failed to load graph data');
             }
-        };
-
+        }
         loadGraphData();
     }, []);
 
-    useEffect(() => {
-        if (settings && nodes.length > 0) {
-            setTimeout(() => {
-                fitView({
-                    padding: 0.2,
-                    minZoom: settings.zoom.min,
-                    maxZoom: settings.zoom.max,
-                });
-            }, 100);
-        }
-    }, [settings, nodes, fitView]);
+    const handleNodeClick = useCallback((node: ForceGraphNode) => {
+        onNodeSelect(node);
+    }, [onNodeSelect]);
 
-    if (!settings) return <div>Loading...</div>;
-
-    return (
-        <div ref={flowWrapper} style={{ width: '100%', height: '100%' }}>
-            <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                nodeTypes={nodeTypes}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onNodeClick={handleNodeClick}
-                fitView
-                minZoom={settings.zoom.min}
-                maxZoom={settings.zoom.max}
-                defaultViewport={{
-                    x: 0,
-                    y: 0,
-                    zoom: settings.zoom.initial
-                }}
-                attributionPosition="bottom-left"
-            >
-                <Background />
-                <Controls />
-            </ReactFlow>
-        </div>
-    );
-});
-
-export const DependencyGraph = React.memo(({ onNodeSelect }: DependencyGraphProps) => {
-    console.log('DependencyGraph received onNodeSelect:', typeof onNodeSelect);
-    
-    if (typeof onNodeSelect !== 'function') {
-        console.error('onNodeSelect is not a function:', onNodeSelect);
+    if (error) {
+        return <div className="graph-error">{error}</div>;
     }
-    
+
+    if (!graphData || !settings) {
+        return <div className="graph-loading">Loading graph data...</div>;
+    }
+
     return (
-        <ReactFlowProvider>
-            <Flow onNodeSelect={onNodeSelect} />
-        </ReactFlowProvider>
+        <ForceGraph2D
+            graphData={graphData}
+            nodeId="id"
+            nodeLabel="name"
+            nodeColor={(node: ForceGraphNode) => node.has_warnings ? '#c5221f' : '#1a73e8'}
+            nodeVal={(node: ForceGraphNode) => node.size / 1000}
+            linkColor={(link: ForceGraphLink) => link.is_circular ? '#c5221f' : '#999'}
+            width={settings.layout.width}
+            height={settings.layout.height}
+            onNodeClick={handleNodeClick}
+            nodeCanvasObject={(node: ForceGraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
+                const label = node.name;
+                const fontSize = 12/globalScale;
+                ctx.font = `${fontSize}px Sans-Serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#333';
+                ctx.fillText(label, node.x || 0, node.y || 0);
+            }}
+            cooldownTicks={50}
+            d3VelocityDecay={0.1}
+        />
     );
-}); 
+} 

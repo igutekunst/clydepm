@@ -111,4 +111,30 @@ class GraphLayout(BaseModel):
     """Graph layout data."""
     nodes: List[DependencyNode]
     edges: List[DependencyEdge]
-    warnings: List[DependencyWarning] 
+    warnings: List[DependencyWarning]
+
+class CompilationStep(BaseModel):
+    """Records a single compilation step."""
+    source_file: str
+    object_file: str
+    command: List[str]
+    include_paths: List[str]
+    start_time: str
+    end_time: Optional[str] = None
+    success: bool = False
+    error: Optional[str] = None
+
+class BuildData(BaseModel):
+    """Collects data for a single build."""
+    package_name: str
+    package_version: str
+    start_time: str
+    compiler_info: Dict[str, str]
+    compilation_steps: List[CompilationStep] = []
+    dependencies: Dict[str, str] = {}
+    dependency_graph: Dict[str, List[str]] = {}  # Maps package to its direct dependencies
+    include_paths: List[str] = []  # All resolved include paths
+    library_paths: List[str] = []  # All resolved library paths
+    end_time: Optional[str] = None
+    success: bool = False
+    error: Optional[str] = None 
