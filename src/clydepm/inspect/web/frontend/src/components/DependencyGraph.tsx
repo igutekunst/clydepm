@@ -80,9 +80,9 @@ export function DependencyGraph({ onNodeSelect, selectedBuild }: DependencyGraph
                 setError(null);
                 setWarnings([]);
 
-                console.log('Fetching dependency graph data...');
+                console.log('Fetching dependency graph data for build:', selectedBuild.id);
                 const [graph, graphSettings] = await Promise.all([
-                    fetchDependencyGraph().catch(e => {
+                    fetchDependencyGraph(selectedBuild.id).catch(e => {
                         console.error('Failed to fetch dependency graph:', e);
                         throw e;
                     }),

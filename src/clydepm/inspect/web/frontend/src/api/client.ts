@@ -3,8 +3,8 @@ import type { SourceFile } from '../types';
 
 const API_BASE = '/api';
 
-export async function fetchDependencyGraph(): Promise<DependencyGraph> {
-    const response = await fetch(`${API_BASE}/dependencies`);
+export async function fetchDependencyGraph(buildId: string): Promise<DependencyGraph> {
+    const response = await fetch(`${API_BASE}/dependencies?build_id=${buildId}`);
     if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Failed to fetch dependency graph: ${response.statusText}\n${errorText}`);

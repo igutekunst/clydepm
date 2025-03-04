@@ -215,17 +215,15 @@ async def get_package_details(package_name: str) -> Package:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/dependencies", response_model=DependencyGraph)
-async def get_dependency_graph() -> DependencyGraph:
-    """Get the full dependency graph data."""
+async def get_dependency_graph(build_id: str) -> DependencyGraph:
+    """Get the dependency graph data for a specific build."""
     try:
-        # Get the latest build data
-        build_files = glob.glob(str(BUILD_DATA_DIR / "build_*.json"))
-        if not build_files:
-            return DependencyGraph(nodes=[], edges=[], warnings=[])
+        # Find the build file
+        build_file = BUILD_DATA_DIR / f"build_{build_id}.json"
+        if not build_file.exists():
+            raise HTTPException(status_code=404, detail=f"Build {build_id} not found")
             
-        # Sort by modification time to get latest
-        latest_build = max(build_files, key=os.path.getmtime)
-        with open(latest_build) as f:
+        with open(build_file) as f:
             build_data = json.load(f)
             
         nodes: List[DependencyGraphNode] = []
@@ -241,8 +239,8 @@ async def get_dependency_graph() -> DependencyGraph:
         metrics = build_data.get("metrics")
         
         # Check if there was a build error
-        has_error = not build_data.get("success", True)
         error_message = build_data.get("error")
+        has_error = bool(error_message)
         
         nodes.append(DependencyGraphNode(
             id=root_id,
@@ -255,11 +253,11 @@ async def get_dependency_graph() -> DependencyGraph:
             has_warnings=has_error
         ))
         
-        if has_error and error_message:
+        if has_error:
             warnings.append(DependencyWarning(
                 id=f"error-{root_id}",
                 package=root_pkg,
-                message=error_message,
+                message=error_message or "Unknown build error",
                 level="error",
                 context={
                     "package": root_pkg.full_name,
@@ -298,7 +296,7 @@ async def get_dependency_graph() -> DependencyGraph:
                         
                         # Add edge from root to dependency
                         edges.append(DependencyGraphEdge(
-                            id=f"{root_id}-{node_id}",
+                            id=f"{root_id}->{node_id}",
                             source=root_id,
                             target=node_id,
                             type="runtime",
@@ -309,25 +307,18 @@ async def get_dependency_graph() -> DependencyGraph:
                         warnings.append(DependencyWarning(
                             id=f"missing-{node_id}",
                             package=pkg_id,
-                            message=f"Package {pkg_id.full_name} not found",
-                            level="error",
+                            message=f"Missing dependency: {pkg_id.full_name}",
+                            level="warning",
                             context={
                                 "package": pkg_id.full_name,
-                                "type": "missing_package"
+                                "type": "missing_dependency"
                             }
                         ))
                         
-                        # Move to next level if we've added 3 nodes at current level
-                        if len(nodes) % 3 == 0:
-                            y_level += 1
-        
-        return DependencyGraph(
-            nodes=nodes,
-            edges=edges,
-            warnings=warnings
-        )
+        return DependencyGraph(nodes=nodes, edges=edges, warnings=warnings)
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Error generating dependency graph: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/builds", response_model=List[BuildData])
@@ -340,6 +331,9 @@ async def get_all_builds() -> List[BuildData]:
         for file in build_files:
             with open(file) as f:
                 data = json.load(f)
+                
+                # Get build ID from filename (e.g., "build_1234567890.json" -> "1234567890")
+                build_id = Path(file).stem.split('_', 1)[1]
                 
                 # Parse timestamps
                 start_time = datetime.fromisoformat(data["timing"]["start"])
@@ -356,7 +350,7 @@ async def get_all_builds() -> List[BuildData]:
                 
                 # Create build data
                 build = BuildData(
-                    id=str(uuid.uuid4()),  # TODO: Use consistent IDs
+                    id=build_id,  # Use consistent ID from filename
                     package=parse_package_identifier(data["package"]["name"]),
                     version=data["package"]["version"],
                     timestamp=start_time,
@@ -365,7 +359,7 @@ async def get_all_builds() -> List[BuildData]:
                     include_paths=data.get("include_paths", []),
                     library_paths=data.get("library_paths", []),
                     metrics=generate_build_metrics(data),
-                    error=None  # TODO: Collect error information
+                    error=data.get("error")  # Get error from build data
                 )
                 
                 # Add compilation steps

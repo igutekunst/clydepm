@@ -236,7 +236,9 @@
     z-index: 10;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
+    max-width: 800px;
+    margin: 0 auto;
     pointer-events: none;
 }
 
@@ -244,21 +246,48 @@
     background: #fce8e6;
     border: 2px solid #c5221f;
     border-radius: 8px;
-    padding: 12px;
+    padding: 16px;
     display: flex;
-    align-items: center;
-    gap: 8px;
+    align-items: flex-start;
+    gap: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     pointer-events: auto;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.graph-warning::before {
+    content: '⚠️';
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    display: none;
+}
+
+.graph-warning-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.graph-warning-message {
+    font-weight: 500;
+    color: #c5221f;
+}
+
+.graph-warning-context {
+    font-size: 0.9em;
+    color: #666;
 }
 
 .warning-icon {
     font-size: 16px;
     line-height: 1;
+    margin-right: 8px;
 }
 
 .warning-message {
     color: #c5221f;
     font-weight: 500;
     flex: 1;
+    display: flex;
+    align-items: center;
 } 
