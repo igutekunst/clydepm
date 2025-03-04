@@ -108,7 +108,10 @@ export function App() {
             </div>
             <div className="graph-section">
                 <h2>Dependency Graph</h2>
-                <DependencyGraph onNodeSelect={handleNodeSelect} />
+                <DependencyGraph 
+                    onNodeSelect={handleNodeSelect} 
+                    selectedBuild={selectedBuild}
+                />
             </div>
         </div>
     );

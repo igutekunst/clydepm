@@ -8,21 +8,23 @@ import ReactFlow, {
     Handle,
     Position,
     ReactFlowProvider,
+    MarkerType,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { fetchDependencyGraph, fetchGraphSettings } from '../api/client';
-import type { DependencyNode, DependencyEdge, GraphSettings, DependencyWarning } from '../types';
+import type { DependencyNode, DependencyEdge, GraphSettings, DependencyWarning, BuildData } from '../types';
 import '../styles/DependencyGraph.css';
 
 interface DependencyGraphProps {
     onNodeSelect: (node: DependencyNode | null) => void;
+    selectedBuild: BuildData | null;
 }
 
 const CustomNode = ({ data }: NodeProps) => (
     <div className={`custom-node ${data.has_warnings ? 'has-warnings' : ''}`}>
         <Handle type="target" position={Position.Top} />
         <div className="node-content">
-            <div className="node-title">{data.name}</div>
+            <div className="node-title">{data.package.name}</div>
             <div className="node-version">{data.version}</div>
         </div>
         <Handle type="source" position={Position.Bottom} />
@@ -56,7 +58,7 @@ class ErrorBoundary extends React.Component<
     }
 }
 
-export function DependencyGraph({ onNodeSelect }: DependencyGraphProps) {
+export function DependencyGraph({ onNodeSelect, selectedBuild }: DependencyGraphProps) {
     const [nodes, setNodes] = useState<Node[]>([]);
     const [edges, setEdges] = useState<Edge[]>([]);
     const [settings, setSettings] = useState<GraphSettings | null>(null);
@@ -71,6 +73,8 @@ export function DependencyGraph({ onNodeSelect }: DependencyGraphProps) {
         let mounted = true;
 
         async function loadGraphData() {
+            if (!selectedBuild) return;
+            
             try {
                 setIsLoading(true);
                 setError(null);
@@ -105,6 +109,11 @@ export function DependencyGraph({ onNodeSelect }: DependencyGraphProps) {
                     source: edge.source,
                     target: edge.target,
                     className: edge.is_circular ? 'circular-edge' : undefined,
+                    markerEnd: {
+                        type: MarkerType.ArrowClosed,
+                        width: 20,
+                        height: 20,
+                    },
                 }));
 
                 setNodes(flowNodes);
@@ -125,7 +134,7 @@ export function DependencyGraph({ onNodeSelect }: DependencyGraphProps) {
 
         loadGraphData();
         return () => { mounted = false; };
-    }, []);
+    }, [selectedBuild?.id]);
 
     const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
         onNodeSelect(node.data);

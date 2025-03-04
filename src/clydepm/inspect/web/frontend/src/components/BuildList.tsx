@@ -16,7 +16,7 @@ export function BuildList({ builds, selectedBuild, onSelectBuild }: BuildListPro
                 {builds.map((build) => (
                     <div
                         key={`${build.id}-${build.package.name}-${build.version}`}
-                        className={`build-item ${build.status === 'success' ? 'success' : 'error'} ${selectedBuild?.id === build.id ? 'selected' : ''}`}
+                        className={`build-item ${build.error ? 'error' : 'success'} ${selectedBuild?.id === build.id ? 'selected' : ''}`}
                         onClick={() => onSelectBuild(build)}
                     >
                         <div className="build-item-header">
@@ -27,7 +27,7 @@ export function BuildList({ builds, selectedBuild, onSelectBuild }: BuildListPro
                             {formatDateTime(new Date(build.timestamp))}
                         </div>
                         <div className="build-item-status">
-                            {build.status === 'success' ? 'Success' : 'Failed'}
+                            {build.error ? 'Failed' : 'Success'}
                         </div>
                     </div>
                 ))}

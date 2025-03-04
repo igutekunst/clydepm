@@ -58,11 +58,8 @@ function createSourceTree(build: BuildData): SourceTree {
 export function BuildDetails({ build }: BuildDetailsProps) {
     const [selectedFile, setSelectedFile] = useState<SourceFile | null>(null);
     
-    const duration = build.compilation_steps.length > 0 && build.compilation_steps[0].end_time
-        ? formatDuration(
-            new Date(build.compilation_steps[0].start_time),
-            new Date(build.compilation_steps[0].end_time)
-        )
+    const duration = build.metrics?.total_time
+        ? `${build.metrics.total_time.toFixed(2)}s`
         : 'In progress';
 
     const sourceTree = createSourceTree(build);
@@ -75,9 +72,8 @@ export function BuildDetails({ build }: BuildDetailsProps) {
                     <div className="build-header">
                         <div>
                             <h3>{build.package.name} {build.version}</h3>
-                            <div className={`build-status ${build.status}`}>
-                                {build.status === 'success' ? 'Success' : 
-                                 build.status === 'failure' ? 'Failed' : 'In Progress'}
+                            <div className={`build-status ${build.error ? 'error' : 'success'}`}>
+                                {build.error ? 'Failed' : 'Success'}
                             </div>
                         </div>
                         <div className="build-timing">
@@ -85,6 +81,13 @@ export function BuildDetails({ build }: BuildDetailsProps) {
                             <div>Duration: {duration}</div>
                         </div>
                     </div>
+
+                    {build.error && (
+                        <div className="build-error">
+                            <h3>Build Error</h3>
+                            <pre>{build.error}</pre>
+                        </div>
+                    )}
 
                     {build.compiler_info && (
                         <div className="compiler-info">
@@ -129,13 +132,6 @@ export function BuildDetails({ build }: BuildDetailsProps) {
                                     </li>
                                 ))}
                             </ul>
-                        </div>
-                    )}
-
-                    {build.error && (
-                        <div className="build-error">
-                            <h3>Build Error</h3>
-                            <pre>{build.error}</pre>
                         </div>
                     )}
                 </div>

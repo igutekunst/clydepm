@@ -1,46 +1,52 @@
 .source-tree-node {
-    cursor: pointer;
+    font-size: 0.9rem;
 }
 
 .tree-item {
-    padding: 8px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
     border-radius: 4px;
-    margin: 2px 0;
+    transition: background-color 0.2s ease;
 }
 
 .tree-item:hover {
-    background-color: #f0f0f0;
+    background-color: var(--hover-color);
 }
 
 .tree-item.selected {
-    background-color: #e3f2fd;
+    background-color: var(--primary-color-light);
 }
 
 .tree-item.loading {
     opacity: 0.7;
 }
 
-.icon {
-    width: 20px;
+.tree-item .icon {
+    font-size: 1rem;
+    width: 1.5rem;
     text-align: center;
 }
 
-.name {
+.tree-item .name {
     flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.warning-count {
-    padding: 2px 6px;
-    background-color: #fff3cd;
-    border-radius: 12px;
-    font-size: 0.8em;
+.tree-item .warning-count {
+    font-size: 0.8rem;
+    color: var(--warning-color);
+    padding: 0.1rem 0.4rem;
+    border-radius: 10px;
+    background-color: var(--warning-color-light);
 }
 
 .children {
-    margin-left: 20px;
+    margin-left: 0.5rem;
 }
 
 .loading-indicator {
