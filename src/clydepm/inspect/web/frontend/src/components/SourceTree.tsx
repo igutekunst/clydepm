@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import type { SourceTree as SourceTreeType, SourceFile } from '../types';
-import { fetchFileInfo } from '../api/client';
 
 interface SourceTreeProps {
     tree: SourceTreeType;
@@ -16,39 +15,30 @@ export const SourceTree: React.FC<SourceTreeProps> = ({
     level = 0
 }) => {
     const [isExpanded, setIsExpanded] = useState(level < 2);
-    const [isLoading, setIsLoading] = useState(false);
 
-    const handleClick = async (e: React.MouseEvent) => {
+    const handleClick = (e: React.MouseEvent) => {
         e.stopPropagation();
         
-        console.log('Tree node clicked:', {
-            path: tree.path,
-            type: tree.type,
-            hasFileInfo: !!tree.file_info
-        });
-
         if (tree.type === 'directory') {
             setIsExpanded(!isExpanded);
         } else {
-            try {
-                setIsLoading(true);
-                const fileInfo = await fetchFileInfo(tree.path);
-                onFileSelect(fileInfo);
-            } catch (error) {
-                console.error('Failed to fetch file info:', error);
-                // You might want to show an error message to the user
-            } finally {
-                setIsLoading(false);
-            }
+            // Create a SourceFile object from the tree node
+            const file: SourceFile = {
+                path: tree.path,
+                warnings: tree.file_info?.warnings || [],
+                errors: tree.file_info?.errors || []
+            };
+            onFileSelect(file);
         }
     };
 
     const isSelected = selectedFile?.path === tree.path;
+    const warningCount = tree.file_info?.warnings?.length ?? 0;
 
     return (
         <div className="source-tree-node">
             <div
-                className={`tree-item ${tree.type} ${isSelected ? 'selected' : ''} ${isLoading ? 'loading' : ''}`}
+                className={`tree-item ${tree.type} ${isSelected ? 'selected' : ''}`}
                 onClick={handleClick}
                 style={{ paddingLeft: `${level * 20}px` }}
             >
@@ -57,10 +47,9 @@ export const SourceTree: React.FC<SourceTreeProps> = ({
                      tree.type === 'header' ? '📄' : '📝'}
                 </span>
                 <span className="name">{tree.name}</span>
-                {tree.file_info?.warnings?.length > 0 && (
-                    <span className="warning-count">⚠️ {tree.file_info.warnings.length}</span>
+                {warningCount > 0 && (
+                    <span className="warning-count">⚠️ {warningCount}</span>
                 )}
-                {isLoading && <span className="loading-indicator">⌛</span>}
             </div>
             {isExpanded && tree.children && tree.children.length > 0 && (
                 <div className="children">

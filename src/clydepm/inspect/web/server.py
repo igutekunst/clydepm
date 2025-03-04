@@ -241,8 +241,8 @@ async def get_dependency_graph() -> DependencyGraph:
         metrics = build_data.get("metrics")
         
         # Check if there was a build error
-        has_error = not build_data.get("success", True) or "error" in build_data
-        error_message = build_data.get("error", "Unknown error")
+        has_error = not build_data.get("success", True)
+        error_message = build_data.get("error")
         
         nodes.append(DependencyGraphNode(
             id=root_id,
@@ -255,7 +255,7 @@ async def get_dependency_graph() -> DependencyGraph:
             has_warnings=has_error
         ))
         
-        if has_error:
+        if has_error and error_message:
             warnings.append(DependencyWarning(
                 id=f"error-{root_id}",
                 package=root_pkg,

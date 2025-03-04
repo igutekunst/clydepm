@@ -1,28 +1,39 @@
 .build-details {
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    padding: 20px;
-    background: #fff;
-    border-radius: 8px;
     height: 100%;
     overflow: hidden;
     width: 100%;
+    background: #fff;
+    border-radius: 8px;
+}
+
+.build-details-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
 }
 
 .build-info {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    padding-right: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-bottom: 30px;
 }
 
-.build-inspector-container {
+.source-files-section {
     flex: 1;
-    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
     border-top: 1px solid #e0e0e0;
     padding-top: 20px;
-    margin-top: 10px;
+}
+
+.source-files-section .build-inspector {
+    flex: 1;
+    min-height: 300px;
+    overflow: hidden;
 }
 
 .build-header {
@@ -99,100 +110,6 @@
     align-items: center;
 }
 
-.compilation-step {
-    margin-bottom: 15px;
-    padding: 15px;
-    border-radius: 6px;
-    border: 1px solid #e0e0e0;
-    background: #fff;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.compilation-step:hover {
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.compilation-step.selected {
-    border-color: #1a73e8;
-    box-shadow: 0 0 0 1px #1a73e8;
-}
-
-.compilation-step.success {
-    border-left: 4px solid #137333;
-}
-
-.compilation-step.error {
-    border-left: 4px solid #c5221f;
-}
-
-.step-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 15px;
-    padding-bottom: 15px;
-    border-bottom: 1px solid #eee;
-    gap: 40px;
-}
-
-.step-files {
-    font-family: monospace;
-    font-size: 0.95em;
-    flex: 1;
-}
-
-.step-timing {
-    text-align: right;
-    color: #666;
-}
-
-.step-error {
-    color: #c5221f;
-    background: #fce8e6;
-    padding: 8px;
-    border-radius: 4px;
-    margin-top: 10px;
-}
-
-.step-details {
-    margin-top: 15px;
-    padding-top: 15px;
-    border-top: 1px solid #eee;
-}
-
-.step-command {
-    margin-bottom: 15px;
-}
-
-.step-command pre {
-    background: #1e1e1e;
-    color: #d4d4d4;
-    padding: 12px;
-    border-radius: 4px;
-    overflow-x: auto;
-    margin: 8px 0;
-}
-
-.step-command code {
-    font-family: monospace;
-    font-size: 0.9em;
-}
-
-.step-includes ul {
-    list-style: none;
-    padding: 0;
-    margin: 8px 0;
-}
-
-.step-includes li {
-    padding: 6px 10px;
-    background: #f5f5f5;
-    margin: 4px 0;
-    border-radius: 4px;
-    font-family: monospace;
-    font-size: 0.9em;
-}
-
 .build-error {
     margin-top: 20px;
     padding: 15px;
@@ -232,20 +149,20 @@ h4 {
 }
 
 /* Custom scrollbar for webkit browsers */
-.build-info::-webkit-scrollbar {
+.build-details-scroll::-webkit-scrollbar {
     width: 8px;
 }
 
-.build-info::-webkit-scrollbar-track {
+.build-details-scroll::-webkit-scrollbar-track {
     background: #f1f1f1;
     border-radius: 4px;
 }
 
-.build-info::-webkit-scrollbar-thumb {
+.build-details-scroll::-webkit-scrollbar-thumb {
     background: #c1c1c1;
     border-radius: 4px;
 }
 
-.build-info::-webkit-scrollbar-thumb:hover {
+.build-details-scroll::-webkit-scrollbar-thumb:hover {
     background: #a8a8a8;
 } 
