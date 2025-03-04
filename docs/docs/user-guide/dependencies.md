@@ -114,7 +114,7 @@ When multiple versions of a package are required:
 
 Remote packages are cached locally:
 ```
-~/.clyde/packages/
+~/.clydepm/packages/
 └── package-name/
     └── version/
         ├── source/
@@ -125,7 +125,7 @@ Remote packages are cached locally:
 
 Built artifacts are cached to speed up rebuilds:
 ```
-~/.clyde/cache/
+~/.clydepm/cache/
 └── package-name/
     └── version/
         └── hash/

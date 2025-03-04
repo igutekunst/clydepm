@@ -102,10 +102,10 @@ clyde install [PACKAGES...] [OPTIONS]
 
 Options:
 - `PACKAGES`: One or more packages to install (e.g. `fmt@8.1.1`, `json@^1.0.0`)
-- `-g`, `--global`: Install packages globally in `~/.clyde/prefix`
+- `-g`, `--global`: Install packages globally in `~/.clydepm/prefix`
 - `--dev`: Install as development dependency
 - `--exact`: Use exact version matching (pins the version)
-- `--prefix`: Override the global installation prefix (default: `~/.clyde/prefix`)
+- `--prefix`: Override the global installation prefix (default: `~/.clydepm/prefix`)
 
 Examples:
 ```bash
@@ -134,7 +134,7 @@ When installing as a project dependency:
 - Maintains a lockfile for reproducible builds
 
 When installing globally (-g):
-- Installs into `~/.clyde/prefix` (or specified prefix)
+- Installs into `~/.clydepm/prefix` (or specified prefix)
 - Makes headers and libraries available system-wide
 - Does not modify any project configuration
 

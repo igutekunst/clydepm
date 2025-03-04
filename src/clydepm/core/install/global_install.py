@@ -19,6 +19,7 @@ class GlobalInstaller:
         """Initialize global installer.
         
         Args:
+            prefix: Optional custom prefix path. Defaults to ~/.clydepm/prefix
             prefix: Optional custom prefix path. Defaults to ~/.clyde/prefix
         """
         self.clyde_home = Path.home() / ".clyde"

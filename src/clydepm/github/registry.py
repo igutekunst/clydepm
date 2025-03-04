@@ -121,8 +121,8 @@ class GitHubRegistry:
             if not tarball_url:
                 raise ValueError(f"Could not find version {version} for package {name}")
             
-            # Create package directory under ~/.clyde/sources
-            sources_dir = Path.home() / ".clyde" / "sources" / self.organization / name / version
+            # Create package directory under ~/.clydepm/sources
+            sources_dir = Path.home() / ".clydepm" / "sources" / self.organization / name / version
             sources_dir.mkdir(parents=True, exist_ok=True)
             
             # Download source code if not already downloaded

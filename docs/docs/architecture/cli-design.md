@@ -126,7 +126,7 @@ def show_progress(total: int):
 
 ### Global Configuration
 
-Located at `~/.clyde/config.yaml`:
+Located at `~/.clydepm/config.yaml`:
 
 ```yaml
 cli:

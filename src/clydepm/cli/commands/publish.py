@@ -77,7 +77,7 @@ def publish(
             error_msg = (
                 f"[red]Error:[/red] Package name includes organization '{org}' but no organization is configured\n\n"
                 f"To fix this, either:\n"
-                f"1. Configure the organization in [bold]~/.clyde/config.yml[/bold]:\n"
+                f"1. Configure the organization in [bold]~/.clydepm/config.yml[/bold]:\n"
                 f"   organization: {org}\n"
                 f"2. Or specify the organization when publishing:\n"
                 f"   clyde publish --org {org}\n"

@@ -12,6 +12,8 @@ from enum import Enum, auto
 
 from ..core.package import Package, PackageType, CompilerInfo, BuildMetadata
 from .cache import BuildCache
+from .hooks import BuildHookManager, BuildStage, BuildContext
+from .collector import BuildDataCollector
 
 # Set up build log file handler
 logger = logging.getLogger("build")
@@ -53,26 +55,6 @@ class BuildResult:
     error: Optional[str] = None
     artifacts: Dict[str, Path] = None
 
-class BuildHookManager:
-    """Manages build hooks."""
-    
-    def __init__(self):
-        self.hooks: Dict[BuildStage, List[Callable[[BuildContext], None]]] = {
-            stage: [] for stage in BuildStage
-        }
-        
-    def add_hook(self, stage: BuildStage, hook: Callable[[BuildContext], None]) -> None:
-        """Add a hook for a build stage."""
-        self.hooks[stage].append(hook)
-        
-    def run_hooks(self, stage: BuildStage, context: BuildContext) -> None:
-        """Run all hooks for a build stage."""
-        for hook in self.hooks[stage]:
-            try:
-                hook(context)
-            except Exception as e:
-                logger.error("Hook failed at stage %s: %s", stage, e)
-
 class Builder:
     """Builds packages."""
     
@@ -84,6 +66,11 @@ class Builder:
         """
         self.cache = BuildCache(cache_dir)
         self.hook_manager = BuildHookManager()
+        
+        # Initialize and register build data collector
+        build_data_dir = cache_dir / "build_data" if cache_dir else Path.home() / ".clydepm" / "build_data"
+        self.collector = BuildDataCollector(build_data_dir)
+        self.collector.register_hooks(self)
         
     def add_hook(self, stage: BuildStage, hook: Callable[[BuildContext], None]) -> None:
         """Add a build hook."""

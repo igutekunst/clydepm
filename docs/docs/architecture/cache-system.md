@@ -54,7 +54,7 @@ Cache keys are generated from multiple inputs:
 ### Directory Structure
 
 ```
-~/.clyde/cache/
+~/.clydepm/cache/
 ├── index.json           # Cache index
 ├── <package_name>/      # Package-specific cache
 │   └── <version>/       # Version-specific cache
@@ -151,11 +151,11 @@ Artifacts are invalidated when:
 
 ## Cache Configuration
 
-Users can configure cache behavior in `~/.clyde/config.yaml`:
+Users can configure cache behavior in `~/.clydepm/config.yaml`:
 
 ```yaml
 cache:
-  directory: ~/.clyde/cache
+  directory: ~/.clydepm/cache
   max_size: 10GB
   max_age: 30d
   cleanup_interval: 7d
