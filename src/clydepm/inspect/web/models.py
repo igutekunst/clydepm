@@ -2,9 +2,9 @@
 API models for the build inspector web interface.
 """
 from datetime import datetime
-from typing import List, Optional, Dict, Literal
+from typing import List, Optional, Dict, Literal, Union
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class Position(BaseModel):
     """Node position in the graph."""
@@ -52,14 +52,14 @@ class SourceFile(BaseModel):
     warnings: Optional[List[BuildWarning]] = None
     included_by: Optional[List[str]] = None
     includes: Optional[List[str]] = None
-    object_size: Optional[int]
+    object_size: Optional[int] = None
 
 class SourceTree(BaseModel):
     """Tree structure of source files"""
     name: str
     path: str
     type: Literal["directory", "source", "header"]
-    children: Optional[List["SourceTree"]] = None
+    children: List["SourceTree"] = Field(default_factory=list)
     file_info: Optional[SourceFile] = None
 
 class BuildMetrics(BaseModel):
@@ -75,66 +75,107 @@ class BuildMetrics(BaseModel):
     total_warnings: int
     total_errors: int
 
-class DependencyNode(BaseModel):
-    """A node in the dependency graph."""
-    id: str
+# New Package-related models
+class PackageIdentifier(BaseModel):
+    """Unique identifier for a package, including organization if present."""
     name: str
+    organization: Optional[str] = None
+
+    @property
+    def full_name(self) -> str:
+        """Get the full package name including organization."""
+        return f"@{self.organization}/{self.name}" if self.organization else self.name
+
+class DependencyRequirement(BaseModel):
+    """A dependency requirement with version constraint."""
+    package: PackageIdentifier
+    version_constraint: str  # e.g. "^1.0.0"
+    type: Literal["runtime", "dev"] = "runtime"
+
+class Package(BaseModel):
+    """Package information."""
+    identifier: PackageIdentifier
+    current_version: str
+    available_versions: List[str]
+    description: Optional[str] = None
+    homepage: Optional[str] = None
+    repository: Optional[str] = None
+    license: Optional[str] = None
+    dependencies: List[DependencyRequirement] = Field(default_factory=list)
+    dev_dependencies: List[DependencyRequirement] = Field(default_factory=list)
+
+class ResolvedDependency(BaseModel):
+    """A resolved dependency with exact version."""
+    package: PackageIdentifier
     version: str
-    is_dev_dep: bool
-    has_warnings: bool
-    size: int
-    direct_deps: List[str]
-    all_deps: List[str]
-    position: Position
-    last_used: datetime
-    source_tree: SourceTree
-    include_paths: List[IncludePath]
-    build_metrics: BuildMetrics
-    compiler_config: Dict[str, str]
+    type: Literal["runtime", "dev"]
+    source_tree: Optional[SourceTree] = None
+    include_paths: List[IncludePath] = Field(default_factory=list)
+    resolved_dependencies: List["ResolvedDependency"] = Field(default_factory=list)
 
-class DependencyEdge(BaseModel):
-    """An edge in the dependency graph."""
-    id: str
-    source: str
-    target: str
-    is_circular: bool
-
-class DependencyWarning(BaseModel):
-    """A warning about a dependency."""
-    id: str
-    package: str
-    message: str
-    level: str
-    context: Dict[str, str]
-
-class GraphLayout(BaseModel):
-    """Graph layout data."""
-    nodes: List[DependencyNode]
-    edges: List[DependencyEdge]
-    warnings: List[DependencyWarning]
-
+# Updated Build-related models
 class CompilationStep(BaseModel):
     """Records a single compilation step."""
     source_file: str
     object_file: str
     command: List[str]
     include_paths: List[str]
-    start_time: str
-    end_time: Optional[str] = None
+    start_time: datetime
+    end_time: Optional[datetime] = None
     success: bool = False
     error: Optional[str] = None
+    metrics: Optional[BuildMetrics] = None
+
+class BuildStatus(str, Enum):
+    """Build status."""
+    IN_PROGRESS = "in_progress"
+    SUCCESS = "success"
+    FAILURE = "failure"
 
 class BuildData(BaseModel):
     """Collects data for a single build."""
-    package_name: str
-    package_version: str
-    start_time: str
+    id: str = Field(description="Unique build identifier")
+    package: PackageIdentifier
+    version: str
+    timestamp: datetime
+    status: BuildStatus
     compiler_info: Dict[str, str]
-    compilation_steps: List[CompilationStep] = []
-    dependencies: Dict[str, str] = {}
-    dependency_graph: Dict[str, List[str]] = {}  # Maps package to its direct dependencies
-    include_paths: List[str] = []  # All resolved include paths
-    library_paths: List[str] = []  # All resolved library paths
-    end_time: Optional[str] = None
-    success: bool = False
-    error: Optional[str] = None 
+    resolved_dependencies: List[ResolvedDependency] = Field(default_factory=list)
+    compilation_steps: List[CompilationStep] = Field(default_factory=list)
+    include_paths: List[str] = Field(default_factory=list)
+    library_paths: List[str] = Field(default_factory=list)
+    metrics: Optional[BuildMetrics] = None
+    error: Optional[str] = None
+
+# Graph visualization models
+class DependencyGraphNode(BaseModel):
+    """A node in the dependency graph visualization."""
+    id: str  # ${packageName}@${version}
+    package: PackageIdentifier
+    version: str
+    type: Literal["runtime", "dev"]
+    position: Position
+    metrics: Optional[BuildMetrics] = None
+    has_warnings: bool = False
+
+class DependencyGraphEdge(BaseModel):
+    """An edge in the dependency graph visualization."""
+    id: str
+    source: str  # Node ID
+    target: str  # Node ID
+    type: Literal["runtime", "dev"]
+    is_circular: bool = False
+
+class DependencyWarning(BaseModel):
+    """A warning about a dependency."""
+    id: str
+    package: PackageIdentifier
+    message: str
+    level: Literal["info", "warning", "error"]
+    context: Dict[str, str]
+
+class GraphLayout(BaseModel):
+    """Graph layout data."""
+    nodes: List[DependencyGraphNode]
+    edges: List[DependencyGraphEdge]
+    warnings: List[DependencyWarning] 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BuildData, SourceFile, SourceTree } from '../types';
+import { BuildData, SourceFile } from '../types';
 import { formatDuration, formatDateTime } from '../utils/time';
 import { BuildInspector } from './BuildInspector';
 
@@ -7,52 +7,44 @@ interface BuildDetailsProps {
     build: BuildData;
 }
 
-function createSourceTree(packageName: string, build: BuildData): SourceTree {
-    // Create a root node for the package
-    const root: SourceTree = {
-        name: packageName,
-        path: '/',
-        type: 'directory',
+function createSourceTree(build: BuildData) {
+    const root = {
+        name: build.package.name,
+        path: `src/${build.package.name}`,
+        type: 'directory' as const,
         children: []
     };
 
     // Add source files from compilation steps
-    if (build.compilation_steps && build.compilation_steps.length > 0) {
-        const sourceFiles = new Set<string>();
-        build.compilation_steps.forEach(step => {
-            sourceFiles.add(step.source_file);
-            if (step.object_file) {
-                sourceFiles.add(step.object_file);
-            }
-        });
+    const sourceFiles = new Set<string>();
+    for (const step of build.compilation_steps) {
+        sourceFiles.add(step.source_file);
+        if (step.object_file) {
+            sourceFiles.add(step.object_file);
+        }
+    }
 
-        // Create source directory
-        const sourceDir: SourceTree = {
+    if (sourceFiles.size > 0) {
+        const sourceDir = {
             name: 'src',
-            path: '/src',
-            type: 'directory',
-            children: Array.from(sourceFiles).map(file => ({
-                name: file.split('/').pop() || file,
-                path: file,
-                type: file.endsWith('.h') || file.endsWith('.hpp') ? 'header' : 'source',
-                children: []
+            path: `src/${build.package.name}/src`,
+            type: 'directory' as const,
+            children: Array.from(sourceFiles).sort().map(path => ({
+                name: path.split('/').pop() || path,
+                path: path,
+                type: path.endsWith('.h') || path.endsWith('.hpp') ? 'header' as const : 'source' as const
             }))
         };
         root.children.push(sourceDir);
     }
 
-    // Add dependencies as directories
-    if (build.dependency_graph && build.dependency_graph[packageName]) {
-        const depsDir: SourceTree = {
+    // Add dependencies
+    if (build.resolved_dependencies.length > 0) {
+        const depsDir = {
             name: 'deps',
-            path: '/deps',
-            type: 'directory',
-            children: build.dependency_graph[packageName].map(dep => ({
-                name: dep,
-                path: `/deps/${dep}`,
-                type: 'directory',
-                children: []
-            }))
+            path: `src/${build.package.name}/deps`,
+            type: 'directory' as const,
+            children: build.resolved_dependencies.map(dep => dep.source_tree)
         };
         root.children.push(depsDir);
     }
@@ -64,11 +56,14 @@ export function BuildDetails({ build }: BuildDetailsProps) {
     const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
     const [selectedFile, setSelectedFile] = useState<SourceFile | null>(null);
     
-    const duration = build.end_time 
-        ? formatDuration(new Date(build.start_time), new Date(build.end_time))
+    const duration = build.compilation_steps.length > 0 && build.compilation_steps[0].end_time
+        ? formatDuration(
+            new Date(build.compilation_steps[0].start_time),
+            new Date(build.compilation_steps[0].end_time)
+        )
         : 'In progress';
 
-    const sourceTree = createSourceTree(build.package_name, build);
+    const sourceTree = createSourceTree(build);
 
     return (
         <div className="build-details">
@@ -76,13 +71,14 @@ export function BuildDetails({ build }: BuildDetailsProps) {
                 <h2>Build Details</h2>
                 <div className="build-header">
                     <div>
-                        <h3>{build.package_name} {build.package_version}</h3>
-                        <div className={`build-status ${build.success ? 'success' : 'error'}`}>
-                            {build.success ? 'Success' : 'Failed'}
+                        <h3>{build.package.name} {build.version}</h3>
+                        <div className={`build-status ${build.status}`}>
+                            {build.status === 'success' ? 'Success' : 
+                             build.status === 'failure' ? 'Failed' : 'In Progress'}
                         </div>
                     </div>
                     <div className="build-timing">
-                        <div>Started: {formatDateTime(new Date(build.start_time))}</div>
+                        <div>Started: {formatDateTime(new Date(build.timestamp))}</div>
                         <div>Duration: {duration}</div>
                     </div>
                 </div>
@@ -96,7 +92,7 @@ export function BuildDetails({ build }: BuildDetailsProps) {
                     </div>
                 )}
 
-                {build.include_paths && build.include_paths.length > 0 && (
+                {build.include_paths.length > 0 && (
                     <div className="build-paths">
                         <h3>Build Paths</h3>
                         <div className="include-paths">
@@ -107,7 +103,7 @@ export function BuildDetails({ build }: BuildDetailsProps) {
                                 ))}
                             </ul>
                         </div>
-                        {build.library_paths && build.library_paths.length > 0 && (
+                        {build.library_paths.length > 0 && (
                             <div className="library-paths">
                                 <h4>Library Paths</h4>
                                 <ul>
@@ -120,18 +116,20 @@ export function BuildDetails({ build }: BuildDetailsProps) {
                     </div>
                 )}
 
-                {build.dependencies && Object.keys(build.dependencies).length > 0 && (
+                {build.resolved_dependencies.length > 0 && (
                     <div className="dependencies">
                         <h3>Dependencies</h3>
                         <ul>
-                            {Object.entries(build.dependencies).map(([name, version]) => (
-                                <li key={name}>{name} @ {version}</li>
+                            {build.resolved_dependencies.map((dep) => (
+                                <li key={`${dep.package.name}-${dep.version}`}>
+                                    {dep.package.name} @ {dep.version}
+                                </li>
                             ))}
                         </ul>
                     </div>
                 )}
 
-                {build.compilation_steps && build.compilation_steps.length > 0 && (
+                {build.compilation_steps.length > 0 && (
                     <div className="compilation-steps">
                         <h3>Compilation Steps</h3>
                         {build.compilation_steps.map((step, i) => (
@@ -161,13 +159,13 @@ export function BuildDetails({ build }: BuildDetailsProps) {
                                 )}
                                 {selectedStepIndex === i && (
                                     <div className="step-details">
-                                        {step.command && step.command.length > 0 && (
+                                        {step.command.length > 0 && (
                                             <div className="step-command">
                                                 <h4>Command</h4>
                                                 <pre><code>{step.command.join(' ')}</code></pre>
                                             </div>
                                         )}
-                                        {step.include_paths && step.include_paths.length > 0 && (
+                                        {step.include_paths.length > 0 && (
                                             <div className="step-includes">
                                                 <h4>Include Paths</h4>
                                                 <ul>
@@ -197,7 +195,11 @@ export function BuildDetails({ build }: BuildDetailsProps) {
                 {sourceTree && (
                     <BuildInspector
                         sourceTree={sourceTree}
-                        includePaths={build.include_paths.map(path => ({ path, type: 'user', from_package: build.package_name }))}
+                        includePaths={build.include_paths.map(path => ({
+                            path,
+                            type: 'user',
+                            from_package: build.package.name
+                        }))}
                         selectedFile={selectedFile}
                         onFileSelect={setSelectedFile}
                     />

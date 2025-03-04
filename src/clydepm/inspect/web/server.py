@@ -10,21 +10,25 @@ from datetime import datetime, timezone
 import json
 import glob
 import os
+import uuid
 
 from .models import (
-    DependencyNode,
-    DependencyEdge,
-    DependencyWarning,
+    BuildData,
     BuildMetrics,
+    BuildStatus,
+    CompilationStep,
+    DependencyGraphNode,
+    DependencyGraphEdge,
+    DependencyWarning,
     GraphLayout,
-    Position,
-    SourceTree,
     IncludePath,
     IncludePathType,
+    Package,
+    PackageIdentifier,
+    Position,
+    ResolvedDependency,
     SourceFile,
-    CompilerCommand,
-    BuildData,
-    CompilationStep
+    SourceTree,
 )
 
 app = FastAPI(
@@ -48,171 +52,76 @@ app.add_middleware(
 # Build data directory
 BUILD_DATA_DIR = Path.home() / ".clydepm" / "build_data"
 
-def generate_example_source_tree(name: str) -> SourceTree:
-    return SourceTree(
+def parse_package_identifier(name: str) -> PackageIdentifier:
+    """Parse a package name into a PackageIdentifier."""
+    if name.startswith("@"):
+        org, pkg = name.split("/", 1)
+        return PackageIdentifier(name=pkg, organization=org[1:])
+    return PackageIdentifier(name=name)
+
+def generate_source_tree(name: str, build_data: dict) -> SourceTree:
+    """Generate a source tree from build data."""
+    root = SourceTree(
         name=name,
         path=f"src/{name}",
-        type="directory",
-        file_info=None,
-        children=[
-            SourceTree(
-                name="include",
-                path=f"src/{name}/include",
-                type="directory",
-                file_info=None,
-                children=[
-                    SourceTree(
-                        name=f"{name}.h",
-                        path=f"src/{name}/include/{name}.h",
-                        type="header",
-                        file_info=None,
-                        children=[]
-                    )
-                ]
-            ),
-            SourceTree(
-                name="src",
-                path=f"src/{name}/src",
-                type="directory",
-                file_info=None,
-                children=[
-                    SourceTree(
-                        name=f"{name}.cpp",
-                        path=f"src/{name}/src/{name}.cpp",
-                        type="source",
-                        file_info=None,
-                        children=[]
-                    )
-                ]
-            )
-        ]
+        type="directory"
     )
+    
+    # Add source files from compilation steps
+    source_files = set()
+    for step in build_data.get("compilation_steps", []):
+        source_files.add(step["source"])
+        if "object" in step:
+            source_files.add(step["object"])
+            
+    if source_files:
+        src_dir = SourceTree(
+            name="src",
+            path=f"src/{name}/src",
+            type="directory",
+            children=[
+                SourceTree(
+                    name=path.split("/")[-1],
+                    path=path,
+                    type="header" if path.endswith((".h", ".hpp")) else "source"
+                )
+                for path in sorted(source_files)
+            ]
+        )
+        root.children.append(src_dir)
+        
+    return root
 
-def generate_example_build_metrics(name: str) -> BuildMetrics:
+def generate_build_metrics(build_data: dict) -> BuildMetrics:
+    """Generate build metrics from build data."""
+    steps = build_data.get("compilation_steps", [])
+    total_time = 0
+    cache_hits = 0
+    cache_misses = 0
+    
+    for step in steps:
+        if "timing" in step:
+            start = datetime.fromisoformat(step["timing"]["start"])
+            if "end" in step["timing"]:
+                end = datetime.fromisoformat(step["timing"]["end"])
+                total_time += (end - start).total_seconds()
+        if step.get("cache_hit"):
+            cache_hits += 1
+        else:
+            cache_misses += 1
+            
     return BuildMetrics(
-        total_time=5.67,
-        cache_hits=10,
-        cache_misses=2,
-        artifact_sizes={f"lib{name}.a": 1024*1024},
-        memory_usage=256.0,
-        cpu_usage=45.6,
+        total_time=total_time,
+        cache_hits=cache_hits,
+        cache_misses=cache_misses,
+        artifact_sizes={},  # TODO: Calculate actual sizes
+        memory_usage=0,     # TODO: Track memory usage
+        cpu_usage=0,        # TODO: Track CPU usage
         timestamp=datetime.now(timezone.utc),
-        files_compiled=12,
-        total_warnings=3,
-        total_errors=0
+        files_compiled=len(steps),
+        total_warnings=0,   # TODO: Count warnings
+        total_errors=0      # TODO: Count errors
     )
-
-# Example data
-EXAMPLE_NODES = [
-    DependencyNode(
-        id="app",
-        name="my-app",
-        version="1.0.0",
-        is_dev_dep=False,
-        has_warnings=False,
-        size=1024,
-        direct_deps=["fmt", "spdlog"],
-        all_deps=["fmt", "spdlog", "catch2"],
-        position=Position(x=0.0, y=0.0),
-        last_used=datetime.now(timezone.utc),
-        source_tree=generate_example_source_tree("my-app"),
-        include_paths=[
-            IncludePath(path="/usr/include", type=IncludePathType.SYSTEM, from_package=None),
-            IncludePath(path="include", type=IncludePathType.USER, from_package=None)
-        ],
-        build_metrics=generate_example_build_metrics("my-app"),
-        compiler_config={"CXX": "g++", "CXXFLAGS": "-O2 -Wall"}
-    ),
-    DependencyNode(
-        id="fmt",
-        name="fmt",
-        version="9.1.0",
-        is_dev_dep=False,
-        has_warnings=False,
-        size=512,
-        direct_deps=[],
-        all_deps=[],
-        position=Position(x=-1.0, y=1.0),
-        last_used=datetime.now(timezone.utc),
-        source_tree=generate_example_source_tree("fmt"),
-        include_paths=[
-            IncludePath(path="/usr/include", type=IncludePathType.SYSTEM, from_package=None),
-            IncludePath(path="include/fmt", type=IncludePathType.USER, from_package="fmt")
-        ],
-        build_metrics=generate_example_build_metrics("fmt"),
-        compiler_config={"CXX": "g++", "CXXFLAGS": "-O2"}
-    ),
-    DependencyNode(
-        id="spdlog",
-        name="spdlog",
-        version="1.11.0",
-        is_dev_dep=False,
-        has_warnings=True,
-        size=768,
-        direct_deps=["fmt"],
-        all_deps=["fmt"],
-        position=Position(x=1.0, y=1.0),
-        last_used=datetime.now(timezone.utc),
-        source_tree=generate_example_source_tree("spdlog"),
-        include_paths=[
-            IncludePath(path="/usr/include", type=IncludePathType.SYSTEM, from_package=None),
-            IncludePath(path="include/spdlog", type=IncludePathType.USER, from_package="spdlog"),
-            IncludePath(path="fmt/include", type=IncludePathType.DEPENDENCY, from_package="fmt")
-        ],
-        build_metrics=generate_example_build_metrics("spdlog"),
-        compiler_config={"CXX": "g++", "CXXFLAGS": "-O2 -DSPDLOG_FMT_EXTERNAL"}
-    ),
-    DependencyNode(
-        id="catch2",
-        name="catch2",
-        version="3.4.0",
-        is_dev_dep=True,
-        has_warnings=False,
-        size=256,
-        direct_deps=[],
-        all_deps=[],
-        position=Position(x=0.0, y=2.0),
-        last_used=datetime.now(timezone.utc),
-        source_tree=generate_example_source_tree("catch2"),
-        include_paths=[
-            IncludePath(path="/usr/include", type=IncludePathType.SYSTEM, from_package=None),
-            IncludePath(path="include", type=IncludePathType.USER, from_package=None)
-        ],
-        build_metrics=generate_example_build_metrics("catch2"),
-        compiler_config={"CXX": "g++", "CXXFLAGS": "-O2"}
-    )
-]
-
-EXAMPLE_EDGES = [
-    DependencyEdge(
-        id="app-fmt",
-        source="app",
-        target="fmt",
-        is_circular=False
-    ),
-    DependencyEdge(
-        id="app-spdlog",
-        source="app",
-        target="spdlog",
-        is_circular=False
-    ),
-    DependencyEdge(
-        id="spdlog-fmt",
-        source="spdlog",
-        target="fmt",
-        is_circular=False
-    )
-]
-
-EXAMPLE_WARNINGS = [
-    DependencyWarning(
-        id="w1",
-        package="spdlog",
-        message="Using older version of fmt than recommended",
-        level="warning",
-        context={"recommended_version": "10.0.0", "current_version": "9.1.0"}
-    )
-]
 
 # API routes
 @app.get("/api/health")
@@ -225,7 +134,7 @@ async def get_graph_settings() -> Dict:
     """Get graph visualization settings."""
     return {
         "zoom": {
-            "initial": 0.6,  # Start more zoomed out
+            "initial": 0.6,
             "min": 0.2,
             "max": 2.0
         },
@@ -244,7 +153,65 @@ async def get_graph_settings() -> Dict:
         }
     }
 
-@app.get("/api/dependencies", response_model=GraphLayout)
+@app.get("/api/packages", response_model=List[Package])
+async def get_all_packages() -> List[Package]:
+    """Get all packages."""
+    try:
+        packages = {}  # Dict[str, Package]
+        
+        # Scan build files to find packages
+        build_files = glob.glob(str(BUILD_DATA_DIR / "build_*.json"))
+        for file in build_files:
+            with open(file) as f:
+                data = json.load(f)
+                pkg_name = data["package"]["name"]
+                pkg_version = data["package"]["version"]
+                
+                if pkg_name not in packages:
+                    pkg_id = parse_package_identifier(pkg_name)
+                    packages[pkg_name] = Package(
+                        identifier=pkg_id,
+                        current_version=pkg_version,
+                        available_versions=[pkg_version]
+                    )
+                else:
+                    if pkg_version not in packages[pkg_name].available_versions:
+                        packages[pkg_name].available_versions.append(pkg_version)
+                        # Update current version if newer
+                        if pkg_version > packages[pkg_name].current_version:
+                            packages[pkg_name].current_version = pkg_version
+                            
+        return list(packages.values())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/packages/{package_name}", response_model=Package)
+async def get_package_details(package_name: str) -> Package:
+    """Get package details."""
+    try:
+        # Find all builds for this package
+        builds = await get_package_builds(package_name)
+        if not builds:
+            raise HTTPException(status_code=404, detail=f"Package {package_name} not found")
+            
+        # Get the latest build
+        latest = builds[0]
+        pkg_id = latest.package
+        
+        # Collect all versions
+        versions = sorted(set(build.version for build in builds))
+        
+        return Package(
+            identifier=pkg_id,
+            current_version=latest.version,
+            available_versions=versions
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/dependencies/graph", response_model=GraphLayout)
 async def get_dependency_graph() -> GraphLayout:
     """Get the full dependency graph data."""
     try:
@@ -258,67 +225,68 @@ async def get_dependency_graph() -> GraphLayout:
         with open(latest_build) as f:
             build_data = json.load(f)
             
-        # Transform build data into graph nodes and edges
-        nodes: List[DependencyNode] = []
-        edges: List[DependencyEdge] = []
+        nodes: List[DependencyGraphNode] = []
+        edges: List[DependencyGraphEdge] = []
         warnings: List[DependencyWarning] = []
         
         # Add root package node
-        root_pkg = build_data["package"]["name"]
-        nodes.append(DependencyNode(
-            id=root_pkg,
-            name=root_pkg,
-            version=build_data["package"]["version"],
-            is_dev_dep=False,
-            has_warnings=False,
-            size=0,  # TODO: Calculate actual size
-            direct_deps=list(build_data.get("dependencies", {}).keys()),
-            all_deps=list(build_data.get("dependency_graph", {}).get(root_pkg, [])),
+        root_pkg = parse_package_identifier(build_data["package"]["name"])
+        root_version = build_data["package"]["version"]
+        root_id = f"{root_pkg.full_name}@{root_version}"
+        
+        nodes.append(DependencyGraphNode(
+            id=root_id,
+            package=root_pkg,
+            version=root_version,
+            type="runtime",
             position=Position(x=0.0, y=0.0),
-            last_used=datetime.now(timezone.utc),
-            source_tree=generate_example_source_tree(root_pkg),  # TODO: Generate real source tree
-            include_paths=[
-                IncludePath(path=path, type=IncludePathType.USER, from_package=None)
-                for path in build_data.get("include_paths", [])
-            ],
-            build_metrics=generate_example_build_metrics(root_pkg),  # TODO: Generate real metrics
-            compiler_config=build_data.get("compiler_info", {})
+            metrics=generate_build_metrics(build_data),
+            has_warnings=False
         ))
         
         # Add dependency nodes
         y_level = 1
-        for pkg_name, deps in build_data.get("dependency_graph", {}).items():
-            if pkg_name == root_pkg:
-                continue
+        processed = {root_id}
+        
+        def add_dependency_node(pkg_name: str, version: str, deps: List[str], y: float) -> None:
+            pkg_id = parse_package_identifier(pkg_name)
+            node_id = f"{pkg_id.full_name}@{version}"
+            
+            if node_id in processed:
+                return
                 
-            # Add node
-            x_pos = (len(nodes) % 3 - 1) * 1.0  # Spread nodes horizontally
-            nodes.append(DependencyNode(
-                id=pkg_name,
-                name=pkg_name,
-                version=build_data["dependencies"].get(pkg_name, "unknown"),
-                is_dev_dep=False,  # TODO: Determine if dev dep
-                has_warnings=False,
-                size=0,  # TODO: Calculate actual size
-                direct_deps=deps,
-                all_deps=deps,
-                position=Position(x=x_pos, y=float(y_level)),
-                last_used=datetime.now(timezone.utc),
-                source_tree=generate_example_source_tree(pkg_name),  # TODO: Generate real source tree
-                include_paths=[],  # TODO: Get actual include paths
-                build_metrics=generate_example_build_metrics(pkg_name),  # TODO: Generate real metrics
-                compiler_config={}  # TODO: Get actual compiler config
+            processed.add(node_id)
+            x_pos = (len(nodes) % 3 - 1) * 1.0
+            
+            nodes.append(DependencyGraphNode(
+                id=node_id,
+                package=pkg_id,
+                version=version,
+                type="runtime",  # TODO: Detect dev dependencies
+                position=Position(x=x_pos, y=y),
+                metrics=None,  # TODO: Get metrics for dependencies
+                has_warnings=False
             ))
             
-            # Add edges for direct dependencies
+            # Add edges
             for dep in deps:
-                edges.append(DependencyEdge(
-                    id=f"{pkg_name}-{dep}",
-                    source=pkg_name,
-                    target=dep,
-                    is_circular=False  # TODO: Detect circular deps
+                dep_version = build_data["dependencies"].get(dep, "unknown")
+                dep_id = f"{dep}@{dep_version}"
+                edges.append(DependencyGraphEdge(
+                    id=f"{node_id}-{dep_id}",
+                    source=node_id,
+                    target=dep_id,
+                    type="runtime"
                 ))
                 
+        # Process dependencies recursively
+        deps_to_process = [(name, build_data["dependencies"].get(name, "unknown"), deps)
+                          for name, deps in build_data.get("dependency_graph", {}).items()]
+        
+        while deps_to_process:
+            pkg_name, version, deps = deps_to_process.pop(0)
+            add_dependency_node(pkg_name, version, deps, float(y_level))
+            
             # Move to next level if we've added 3 nodes at current level
             if len(nodes) % 3 == 0:
                 y_level += 1
@@ -331,135 +299,71 @@ async def get_dependency_graph() -> GraphLayout:
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/dependencies/{package}", response_model=DependencyNode)
-async def get_package_details(package: str) -> DependencyNode:
-    """Get detailed information about a specific package."""
-    try:
-        for node in EXAMPLE_NODES:
-            if node.id == package:
-                return node
-        raise HTTPException(status_code=404, detail=f"Package {package} not found")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/metrics", response_model=BuildMetrics)
-async def get_build_metrics() -> BuildMetrics:
-    """Get current build metrics."""
-    try:
-        return BuildMetrics(
-            total_time=15.3,
-            cache_hits=42,
-            cache_misses=3,
-            artifact_sizes={
-                "my-app": 1024 * 1024,  # 1MB
-                "fmt": 512 * 1024,      # 512KB
-                "spdlog": 768 * 1024,   # 768KB
-                "catch2": 256 * 1024    # 256KB
-            },
-            memory_usage=256.5,  # MB
-            cpu_usage=45.2,      # Percentage
-            timestamp=datetime.now(timezone.utc)
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/file-info/{file_path:path}")
-async def get_file_info(file_path: str) -> SourceFile:
-    try:
-        # This is where you'll eventually integrate with your build system
-        # For now, return mock data based on file type
-        is_header = file_path.endswith(('.h', '.hpp', '.hxx'))
-        now = datetime.now(timezone.utc)
-        
-        return SourceFile(
-            path=file_path,
-            type="header" if is_header else "source",
-            size=1024,  # Mock size
-            last_modified=now,  # Required field
-            included_by=[
-                'src/main.cpp',
-                'src/other_file.cpp'
-            ] if is_header else [],
-            includes=[
-                '<vector>',
-                '<string>',
-                '<memory>',
-                '"my-project/config.h"',
-                '"my-project/utils.h"',
-                '"../include/local.h"'
-            ],
-            compiler_command=CompilerCommand(
-                compiler="clang++",  # Required field
-                source_file=file_path,  # Required field
-                output_file=f"{file_path}.o",  # Required field
-                command_line=f"clang++ -c {file_path}",
-                duration_ms=0,
-                cache_hit=False,
-                cache_key="mock-key",  # Required field
-                timestamp=now,  # Required field
-                flags=['-Wall', '-Wextra', '-std=c++17'],
-                include_paths=[
-                    IncludePath(path='/usr/include', type=IncludePathType.SYSTEM),
-                    IncludePath(path='include', type=IncludePathType.USER),
-                    IncludePath(
-                        path='deps/fmt/include',
-                        type=IncludePathType.DEPENDENCY,
-                        from_package='fmt'
-                    )
-                ],
-                defines={
-                    'DEBUG': '1',
-                    'VERSION': '"1.0.0"'
-                }
-            ),
-            warnings=[],
-            object_size=None
-        )
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
 @app.get("/api/builds", response_model=List[BuildData])
 async def get_all_builds() -> List[BuildData]:
     """Get all build data."""
     try:
         build_files = glob.glob(str(BUILD_DATA_DIR / "build_*.json"))
         builds = []
+        
         for file in build_files:
             with open(file) as f:
                 data = json.load(f)
-                # Transform the data to match BuildData model
-                build_data = {
-                    "package_name": data["package"]["name"],
-                    "package_version": data["package"]["version"],
-                    "start_time": data["timing"]["start"],
-                    "end_time": data["timing"]["end"] if "end" in data["timing"] else None,
-                    "compiler_info": {
-                        "name": data["compiler"]["name"],
-                        "version": data["compiler"]["version"],
-                        "target": data["compiler"]["target"]
-                    },
-                    "compilation_steps": [
-                        {
-                            "source_file": step["source"],
-                            "object_file": step["object"],
-                            "command": step["command"].split() if step["command"] else [],
-                            "include_paths": step["include_paths"],
-                            "start_time": step["timing"]["start"],
-                            "end_time": step["timing"]["end"] if "end" in step["timing"] else None,
-                            "success": step["success"],
-                            "error": step["error"]
-                        }
-                        for step in data["compilation_steps"]
-                    ],
-                    "dependencies": data.get("dependencies", {}),
-                    "dependency_graph": data.get("dependency_graph", {}),
-                    "include_paths": data.get("include_paths", []),
-                    "library_paths": data.get("library_paths", []),
-                    "success": all(step["success"] for step in data["compilation_steps"]),
-                    "error": None  # We'll add error handling later if needed
-                }
-                builds.append(BuildData(**build_data))
-        return sorted(builds, key=lambda x: x.start_time, reverse=True)
+                
+                # Parse timestamps
+                start_time = datetime.fromisoformat(data["timing"]["start"])
+                end_time = (datetime.fromisoformat(data["timing"]["end"])
+                           if "end" in data["timing"] else None)
+                
+                # Determine build status
+                if "end" not in data["timing"]:
+                    status = BuildStatus.IN_PROGRESS
+                else:
+                    status = (BuildStatus.SUCCESS 
+                             if all(step["success"] for step in data["compilation_steps"])
+                             else BuildStatus.FAILURE)
+                
+                # Create build data
+                build = BuildData(
+                    id=str(uuid.uuid4()),  # TODO: Use consistent IDs
+                    package=parse_package_identifier(data["package"]["name"]),
+                    version=data["package"]["version"],
+                    timestamp=start_time,
+                    status=status,
+                    compiler_info=data["compiler"],
+                    include_paths=data.get("include_paths", []),
+                    library_paths=data.get("library_paths", []),
+                    metrics=generate_build_metrics(data),
+                    error=None  # TODO: Collect error information
+                )
+                
+                # Add compilation steps
+                for step in data["compilation_steps"]:
+                    build.compilation_steps.append(CompilationStep(
+                        source_file=step["source"],
+                        object_file=step["object"],
+                        command=step["command"].split() if step["command"] else [],
+                        include_paths=step["include_paths"],
+                        start_time=datetime.fromisoformat(step["timing"]["start"]),
+                        end_time=(datetime.fromisoformat(step["timing"]["end"])
+                                if "end" in step["timing"] else None),
+                        success=step["success"],
+                        error=step.get("error")
+                    ))
+                
+                # Add resolved dependencies
+                for dep_name, dep_version in data.get("dependencies", {}).items():
+                    dep_id = parse_package_identifier(dep_name)
+                    build.resolved_dependencies.append(ResolvedDependency(
+                        package=dep_id,
+                        version=dep_version,
+                        type="runtime",  # TODO: Detect dev dependencies
+                        source_tree=generate_source_tree(dep_name, data)
+                    ))
+                
+                builds.append(build)
+                
+        return sorted(builds, key=lambda x: x.timestamp, reverse=True)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -467,59 +371,68 @@ async def get_all_builds() -> List[BuildData]:
 async def get_package_builds(package_name: str) -> List[BuildData]:
     """Get all builds for a specific package."""
     try:
-        build_files = glob.glob(str(BUILD_DATA_DIR / f"build_{package_name}_*.json"))
-        builds = []
-        for file in build_files:
-            with open(file) as f:
-                data = json.load(f)
-                # Transform the data to match BuildData model
-                build_data = {
-                    "package_name": data["package"]["name"],
-                    "package_version": data["package"]["version"],
-                    "start_time": data["timing"]["start"],
-                    "end_time": data["timing"]["end"] if "end" in data["timing"] else None,
-                    "compiler_info": {
-                        "name": data["compiler"]["name"],
-                        "version": data["compiler"]["version"],
-                        "target": data["compiler"]["target"]
-                    },
-                    "compilation_steps": [
-                        {
-                            "source_file": step["source"],
-                            "object_file": step["object"],
-                            "command": step["command"].split() if step["command"] else [],
-                            "include_paths": step["include_paths"],
-                            "start_time": step["timing"]["start"],
-                            "end_time": step["timing"]["end"] if "end" in step["timing"] else None,
-                            "success": step["success"],
-                            "error": step["error"]
-                        }
-                        for step in data["compilation_steps"]
-                    ],
-                    "dependencies": data.get("dependencies", {}),
-                    "dependency_graph": data.get("dependency_graph", {}),
-                    "include_paths": data.get("include_paths", []),
-                    "library_paths": data.get("library_paths", []),
-                    "success": all(step["success"] for step in data["compilation_steps"]),
-                    "error": None  # We'll add error handling later if needed
-                }
-                builds.append(BuildData(**build_data))
-        return sorted(builds, key=lambda x: x.start_time, reverse=True)
+        all_builds = await get_all_builds()
+        package_builds = [
+            build for build in all_builds
+            if build.package and build.package.name == package_name
+        ]
+        
+        if not package_builds:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No builds found for package {package_name}"
+            )
+            
+        # Convert each build to match the response model
+        return [BuildData(
+            id=build.id,
+            package=build.package,
+            version=build.version,
+            timestamp=build.timestamp,
+            status=build.status,
+            compiler_info=build.compiler_info,
+            resolved_dependencies=build.resolved_dependencies,
+            compilation_steps=build.compilation_steps,
+            include_paths=build.include_paths,
+            library_paths=build.library_paths,
+            metrics=build.metrics,
+            error=build.error
+        ) for build in package_builds]
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error getting builds for package {package_name}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get builds for package {package_name}: {str(e)}"
+        )
 
 @app.get("/api/builds/{package_name}/latest", response_model=BuildData)
 async def get_latest_package_build(package_name: str) -> BuildData:
     """Get the latest build for a specific package."""
     try:
+        # Get all builds for the package
         builds = await get_package_builds(package_name)
+        
         if not builds:
-            raise HTTPException(status_code=404, detail=f"No builds found for package {package_name}")
-        return builds[0]  # Already sorted by start_time
+            raise HTTPException(
+                status_code=404,
+                detail=f"No builds found for package {package_name}"
+            )
+            
+        # Sort by timestamp and get the latest
+        latest_build = max(builds, key=lambda b: b.timestamp)
+        
+        # Convert to response model
+        return latest_build
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error getting latest build for package {package_name}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get latest build for package {package_name}: {str(e)}"
+        )
 
 # Serve frontend in production
 frontend_path = Path(__file__).parent / "frontend" / "dist"

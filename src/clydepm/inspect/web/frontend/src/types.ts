@@ -83,12 +83,9 @@ export interface BuildWarning {
 
 export interface SourceFile {
     path: string;
-    type: 'source' | 'header';
-    size: number;
-    compiler_command?: CompilerCommand;
-    warnings?: BuildWarning[];
-    included_by?: string[];
-    includes?: string[];
+    content?: string;
+    warnings?: string[];
+    errors?: string[];
 }
 
 export interface SourceTree {
@@ -96,7 +93,10 @@ export interface SourceTree {
     path: string;
     type: 'directory' | 'source' | 'header';
     children?: SourceTree[];
-    file_info?: SourceFile;
+    file_info?: {
+        warnings?: string[];
+        errors?: string[];
+    } | null;
 }
 
 export interface GraphSettings {
@@ -132,20 +132,52 @@ export interface CompilationStep {
 }
 
 export interface BuildData {
-    package_name: string;
-    package_version: string;
-    start_time: string;
+    id: string;
+    package: {
+        name: string;
+        organization: string | null;
+    };
+    version: string;
+    timestamp: string;
+    status: 'success' | 'failure' | 'in_progress';
     compiler_info: {
         name: string;
         version: string;
         target: string;
     };
-    compilation_steps: CompilationStep[];
-    dependencies: { [key: string]: string };
-    dependency_graph: { [key: string]: string[] };
+    resolved_dependencies: Array<{
+        package: {
+            name: string;
+            organization: string | null;
+        };
+        version: string;
+        type: string;
+        source_tree: SourceTree;
+        include_paths: string[];
+    }>;
+    compilation_steps: Array<{
+        source_file: string;
+        object_file: string;
+        command: string[];
+        include_paths: string[];
+        start_time: string;
+        end_time?: string;
+        success: boolean;
+        error?: string;
+    }>;
     include_paths: string[];
     library_paths: string[];
-    end_time?: string;
-    success: boolean;
-    error?: string;
+    metrics: {
+        total_time: number;
+        cache_hits: number;
+        cache_misses: number;
+        artifact_sizes: Record<string, number>;
+        memory_usage: number;
+        cpu_usage: number;
+        timestamp: string;
+        files_compiled: number;
+        total_warnings: number;
+        total_errors: number;
+    } | null;
+    error: string | null;
 } 

@@ -1,4 +1,4 @@
-import { DependencyGraph, PackageDetails, BuildMetrics, GraphSettings, BuildData } from '../types';
+import { DependencyGraph, BuildMetrics, GraphSettings, BuildData } from '../types';
 import type { SourceFile } from '../types';
 
 const API_BASE = '/api';
@@ -51,10 +51,30 @@ export async function getPackageBuilds(packageName: string): Promise<BuildData[]
     return response.json();
 }
 
-export async function getLatestPackageBuild(packageName: string): Promise<BuildData> {
-    const response = await fetch(`${API_BASE}/builds/${packageName}/latest`);
-    if (!response.ok) {
-        throw new Error(`Failed to fetch latest build for package ${packageName}: ${response.statusText}`);
+export async function getLatestPackageBuild(packageName: string): Promise<BuildData | null> {
+    if (!packageName) {
+        console.warn('getLatestPackageBuild called with empty package name');
+        return null;
     }
-    return response.json();
+
+    try {
+        const response = await fetch(`${API_BASE}/builds/${encodeURIComponent(packageName)}/latest`);
+        if (!response.ok) {
+            if (response.status === 404) {
+                console.warn(`No latest build found for package ${packageName}`);
+                return null;
+            }
+            const errorText = await response.text();
+            throw new Error(`Failed to fetch latest build for package ${packageName}: ${response.statusText}\n${errorText}`);
+        }
+        const data = await response.json();
+        if (!data || !data.id || !data.package?.name) {
+            console.warn(`Invalid build data received for package ${packageName}:`, data);
+            return null;
+        }
+        return data;
+    } catch (error) {
+        console.error(`Error fetching latest build for package ${packageName}:`, error);
+        throw new Error(`Failed to fetch latest build for package ${packageName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
 } 

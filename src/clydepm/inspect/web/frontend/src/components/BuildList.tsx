@@ -4,7 +4,7 @@ import { formatDateTime } from '../utils/time';
 
 interface BuildListProps {
     builds: BuildData[];
-    selectedBuild?: BuildData;
+    selectedBuild: BuildData | null;
     onSelectBuild: (build: BuildData) => void;
 }
 
@@ -15,19 +15,19 @@ export function BuildList({ builds, selectedBuild, onSelectBuild }: BuildListPro
             <div className="builds">
                 {builds.map((build) => (
                     <div
-                        key={build.start_time}
-                        className={`build-item ${build.success ? 'success' : 'error'} ${selectedBuild?.start_time === build.start_time ? 'selected' : ''}`}
+                        key={`${build.id}-${build.package.name}-${build.version}`}
+                        className={`build-item ${build.status === 'success' ? 'success' : 'error'} ${selectedBuild?.id === build.id ? 'selected' : ''}`}
                         onClick={() => onSelectBuild(build)}
                     >
                         <div className="build-item-header">
-                            <span className="package-name">{build.package_name}</span>
-                            <span className="package-version">{build.package_version}</span>
+                            <span className="package-name">{build.package.name}</span>
+                            <span className="package-version">{build.version}</span>
                         </div>
                         <div className="build-item-time">
-                            {formatDateTime(new Date(build.start_time))}
+                            {formatDateTime(new Date(build.timestamp))}
                         </div>
                         <div className="build-item-status">
-                            {build.success ? 'Success' : 'Failed'}
+                            {build.status === 'success' ? 'Success' : 'Failed'}
                         </div>
                     </div>
                 ))}
