@@ -1,58 +1,96 @@
 .app {
-    min-height: 100vh;
-    background: #f8f9fa;
     display: flex;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    background-color: var(--background-color);
 }
 
 .sidebar {
     width: 300px;
-    flex-shrink: 0;
+    flex: 0 0 300px;
+    background-color: var(--background-color);
+    border-right: 1px solid var(--border-color);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .main-content {
     flex: 1;
-    padding: 20px;
-    margin-left: 300px;
+    display: flex;
+    height: 100vh;
+}
+
+.app-header, .app-content {
+    display: none;
+}
+
+.content-container {
+    display: flex;
+    width: 100%;
+}
+
+.details-section {
+    width: 400px;
+    flex: 0 0 400px;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    border-right: 1px solid var(--border-color);
+    background-color: var(--surface-color);
 }
 
 .graph-section {
     flex: 1;
-    min-height: 400px;
-    background: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--surface-color);
+    min-width: 0;
+    overflow: hidden;
 }
 
-.details-section {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-}
-
-@media (max-width: 1200px) {
-    .details-section {
-        grid-template-columns: 1fr;
-    }
-}
-
-.app-header {
-    padding: 20px;
-    background: #fff;
-    border-bottom: 1px solid #e0e0e0;
-}
-
-.app-header h1 {
+.graph-section h2 {
     margin: 0;
-    font-size: 1.5em;
-    color: #333;
+    padding: 1.5rem;
+    font-size: 1.2rem;
+    color: var(--text-color);
+    flex: 0 0 auto;
+    border-bottom: 1px solid var(--border-color);
 }
 
-.app-content {
-    padding: 20px;
+.graph-section .graph-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.loading, .error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-size: 1.2rem;
+    color: var(--secondary-color);
+}
+
+.error {
+    color: var(--error-color);
+    padding: 2rem;
+    text-align: center;
+}
+
+.no-selection {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    font-size: 1.1rem;
+    color: var(--secondary-color);
+    text-align: center;
+    padding: 2rem;
+    background-color: var(--background-color);
 }
 
 .error-message {
@@ -64,42 +102,30 @@
 }
 
 .content-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 20px;
+    display: none;
 }
 
-.build-panel {
-    background: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+.build-panel, .graph-panel {
+    display: none;
 }
 
-.graph-panel {
-    background: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    padding: 20px;
+.build-details {
+    padding: 1rem;
 }
 
-.graph-panel h2 {
-    margin: 0 0 20px 0;
-    font-size: 1.2em;
-    color: #333;
+.build-header {
+    margin-bottom: 1.5rem;
 }
 
-.graph-container {
-    height: 500px;
-    border: 1px solid #e0e0e0;
-    border-radius: 4px;
-    overflow: hidden;
-    margin-bottom: 20px;
+.build-info h2 {
+    margin: 0 0 1rem 0;
+    font-size: 1.2rem;
+    color: var(--text-color);
 }
 
-.details-panel {
-    padding: 20px;
-    background: #f8f9fa;
-    border-radius: 4px;
+.build-timing {
+    margin-top: 0.5rem;
+    color: var(--secondary-color);
 }
 
 @media (min-width: 1200px) {

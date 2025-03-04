@@ -178,4 +178,10 @@ class GraphLayout(BaseModel):
     """Graph layout data."""
     nodes: List[DependencyGraphNode]
     edges: List[DependencyGraphEdge]
+    warnings: List[DependencyWarning]
+
+class DependencyGraph(BaseModel):
+    """Dependency graph data."""
+    nodes: List[DependencyGraphNode]
+    edges: List[DependencyGraphEdge]
     warnings: List[DependencyWarning] 

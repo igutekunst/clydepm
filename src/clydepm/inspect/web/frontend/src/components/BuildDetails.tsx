@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BuildData, SourceFile } from '../types';
+import { BuildData, SourceFile, SourceTree } from '../types';
 import { formatDuration, formatDateTime } from '../utils/time';
 import { BuildInspector } from './BuildInspector';
 
@@ -7,11 +7,11 @@ interface BuildDetailsProps {
     build: BuildData;
 }
 
-function createSourceTree(build: BuildData) {
-    const root = {
+function createSourceTree(build: BuildData): SourceTree {
+    const root: SourceTree = {
         name: build.package.name,
         path: `src/${build.package.name}`,
-        type: 'directory' as const,
+        type: 'directory',
         children: []
     };
 
@@ -25,27 +25,30 @@ function createSourceTree(build: BuildData) {
     }
 
     if (sourceFiles.size > 0) {
-        const sourceDir = {
+        const sourceDir: SourceTree = {
             name: 'src',
             path: `src/${build.package.name}/src`,
-            type: 'directory' as const,
+            type: 'directory',
             children: Array.from(sourceFiles).sort().map(path => ({
                 name: path.split('/').pop() || path,
                 path: path,
-                type: path.endsWith('.h') || path.endsWith('.hpp') ? 'header' as const : 'source' as const
+                type: path.endsWith('.h') || path.endsWith('.hpp') ? 'header' : 'source',
+                children: []
             }))
         };
+        if (!root.children) root.children = [];
         root.children.push(sourceDir);
     }
 
     // Add dependencies
     if (build.resolved_dependencies.length > 0) {
-        const depsDir = {
+        const depsDir: SourceTree = {
             name: 'deps',
             path: `src/${build.package.name}/deps`,
-            type: 'directory' as const,
+            type: 'directory',
             children: build.resolved_dependencies.map(dep => dep.source_tree)
         };
+        if (!root.children) root.children = [];
         root.children.push(depsDir);
     }
 

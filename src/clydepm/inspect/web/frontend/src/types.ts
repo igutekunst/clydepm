@@ -3,27 +3,27 @@ export interface Position {
     y: number;
 }
 
+export interface PackageIdentifier {
+    name: string;
+    organization?: string;
+}
+
 export interface DependencyNode {
     id: string;
+    package: PackageIdentifier;
     name: string;
     version: string;
-    is_dev_dep: boolean;
-    has_warnings: boolean;
-    size: number;
-    direct_deps: string[];
-    all_deps: string[];
+    type: 'runtime' | 'dev';
     position: Position;
-    last_used: string;
-    source_tree: SourceTree;
-    include_paths: IncludePath[];
-    build_metrics: BuildMetrics;
-    compiler_config: Record<string, string>;
+    metrics: BuildMetrics | null;
+    has_warnings: boolean;
 }
 
 export interface DependencyEdge {
     id: string;
     source: string;
     target: string;
+    type: 'runtime' | 'dev';
     is_circular: boolean;
 }
 

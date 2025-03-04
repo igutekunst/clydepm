@@ -1,25 +1,26 @@
 .build-list {
-    width: 300px;
-    height: 100vh;
-    background: #f8f9fa;
-    border-right: 1px solid #e0e0e0;
+    width: 100%;
+    height: 100%;
+    background: var(--background-color);
     padding: 20px;
     overflow-y: auto;
-    position: fixed;
-    left: 0;
-    top: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .build-list h2 {
     margin: 0 0 20px 0;
     font-size: 1.2em;
-    color: #333;
+    color: var(--text-color);
+    flex: 0 0 auto;
 }
 
 .builds {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    flex: 1;
+    overflow-y: auto;
 }
 
 .build-item {

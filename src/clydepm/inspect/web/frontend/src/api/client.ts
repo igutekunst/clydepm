@@ -5,13 +5,10 @@ const API_BASE = '/api';
 
 export async function fetchDependencyGraph(): Promise<DependencyGraph> {
     const response = await fetch(`${API_BASE}/dependencies`);
-    if (!response.ok) throw new Error('Failed to fetch dependency graph');
-    return response.json();
-}
-
-export async function fetchPackageDetails(packageId: string): Promise<PackageDetails> {
-    const response = await fetch(`${API_BASE}/dependencies/${packageId}`);
-    if (!response.ok) throw new Error('Failed to fetch package details');
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch dependency graph: ${response.statusText}\n${errorText}`);
+    }
     return response.json();
 }
 

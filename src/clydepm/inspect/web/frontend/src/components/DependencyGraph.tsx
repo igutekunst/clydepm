@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import ReactFlow, {
     Node,
     Edge,
@@ -7,10 +7,11 @@ import ReactFlow, {
     NodeProps,
     Handle,
     Position,
+    ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { fetchDependencyGraph, fetchGraphSettings } from '../api/client';
-import type { DependencyNode, DependencyEdge, GraphSettings } from '../types';
+import type { DependencyNode, DependencyEdge, GraphSettings, DependencyWarning } from '../types';
 import '../styles/DependencyGraph.css';
 
 interface DependencyGraphProps {
@@ -28,19 +29,69 @@ const CustomNode = ({ data }: NodeProps) => (
     </div>
 );
 
+class ErrorBoundary extends React.Component<
+    { children: React.ReactNode },
+    { hasError: boolean }
+> {
+    constructor(props: { children: React.ReactNode }) {
+        super(props);
+        this.state = { hasError: false };
+    }
+
+    static getDerivedStateFromError() {
+        return { hasError: true };
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="graph-error">
+                    Something went wrong rendering the graph.
+                    Please try refreshing the page.
+                </div>
+            );
+        }
+
+        return this.props.children;
+    }
+}
+
 export function DependencyGraph({ onNodeSelect }: DependencyGraphProps) {
     const [nodes, setNodes] = useState<Node[]>([]);
     const [edges, setEdges] = useState<Edge[]>([]);
     const [settings, setSettings] = useState<GraphSettings | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [warnings, setWarnings] = useState<DependencyWarning[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Memoize nodeTypes to prevent React Flow warning
+    const nodeTypes = useMemo(() => ({ custom: CustomNode }), []);
 
     useEffect(() => {
+        let mounted = true;
+
         async function loadGraphData() {
             try {
+                setIsLoading(true);
+                setError(null);
+                setWarnings([]);
+
+                console.log('Fetching dependency graph data...');
                 const [graph, graphSettings] = await Promise.all([
-                    fetchDependencyGraph(),
-                    fetchGraphSettings()
+                    fetchDependencyGraph().catch(e => {
+                        console.error('Failed to fetch dependency graph:', e);
+                        throw e;
+                    }),
+                    fetchGraphSettings().catch(e => {
+                        console.error('Failed to fetch graph settings:', e);
+                        throw e;
+                    })
                 ]);
+
+                if (!mounted) return;
+
+                console.log('Received graph data:', graph);
+                console.log('Received graph settings:', graphSettings);
 
                 const flowNodes: Node[] = graph.nodes.map(node => ({
                     id: node.id,
@@ -59,11 +110,21 @@ export function DependencyGraph({ onNodeSelect }: DependencyGraphProps) {
                 setNodes(flowNodes);
                 setEdges(flowEdges);
                 setSettings(graphSettings);
+                setWarnings(graph.warnings || []);
             } catch (e) {
-                setError(e instanceof Error ? e.message : 'Failed to load graph data');
+                if (!mounted) return;
+                const errorMessage = e instanceof Error ? e.message : 'Failed to load graph data';
+                console.error('Error loading graph data:', errorMessage);
+                setError(errorMessage);
+            } finally {
+                if (mounted) {
+                    setIsLoading(false);
+                }
             }
         }
+
         loadGraphData();
+        return () => { mounted = false; };
     }, []);
 
     const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
@@ -74,22 +135,37 @@ export function DependencyGraph({ onNodeSelect }: DependencyGraphProps) {
         return <div className="graph-error">{error}</div>;
     }
 
-    if (!settings) {
+    if (isLoading || !settings) {
         return <div className="graph-loading">Loading graph data...</div>;
     }
 
     return (
         <div className="graph-container" style={{ height: settings.layout.height }}>
-            <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                nodeTypes={{ custom: CustomNode }}
-                onNodeClick={handleNodeClick}
-                fitView
-            >
-                <Background />
-                <Controls />
-            </ReactFlow>
+            {warnings.length > 0 && (
+                <div className="graph-warnings">
+                    {warnings.map((warning, index) => (
+                        <div key={index} className="graph-warning">
+                            <span className="warning-icon">⚠️</span>
+                            <span className="warning-message">{warning.message}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+            <ErrorBoundary>
+                <ReactFlowProvider>
+                    <ReactFlow
+                        nodes={nodes}
+                        edges={edges}
+                        nodeTypes={nodeTypes}
+                        onNodeClick={handleNodeClick}
+                        fitView
+                        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+                    >
+                        <Background />
+                        <Controls />
+                    </ReactFlow>
+                </ReactFlowProvider>
+            </ErrorBoundary>
         </div>
     );
 } 

@@ -10,6 +10,7 @@ import './styles/main.css';
 import './styles/App.css';
 import './styles/BuildDetails.css';
 import './styles/BuildList.css';
+import './styles/DependencyDetails.css';
 
 export function App() {
     const [selectedNode, setSelectedNode] = useState<DependencyNode | null>(null);
@@ -28,23 +29,19 @@ export function App() {
                 setIsLoading(true);
                 setError(null);
                 
-                // Get all builds
                 const builds = await getAllBuilds();
                 setAllBuilds(builds);
                 
-                // If we have builds, try to get the latest build for the first package
                 if (builds.length > 0 && builds[0].package?.name) {
                     try {
                         const latestBuild = await getLatestPackageBuild(builds[0].package.name);
                         if (latestBuild) {
                             setSelectedBuild(latestBuild);
                         } else {
-                            // If we can't get the latest build, use the first one
                             setSelectedBuild(builds[0]);
                         }
                     } catch (latestError) {
                         console.error('Error loading latest build:', latestError);
-                        // If we fail to get the latest build but have all builds, just use the first one
                         setSelectedBuild(builds[0]);
                     }
                 }
@@ -63,7 +60,6 @@ export function App() {
     const handleSelectBuild = async (build: BuildData) => {
         try {
             setError(null);
-            // Try to get the latest build for this package
             if (build.package?.name) {
                 try {
                     const latestBuild = await getLatestPackageBuild(build.package.name);
@@ -75,11 +71,9 @@ export function App() {
                     console.error('Error getting latest build:', e);
                 }
             }
-            // If we can't get the latest build, use the selected one
             setSelectedBuild(build);
         } catch (e) {
             console.error('Error selecting build:', e);
-            // If we fail to get the latest build, just use the selected one
             setSelectedBuild(build);
         }
     };
@@ -101,20 +95,20 @@ export function App() {
                     onSelectBuild={handleSelectBuild}
                 />
             </div>
-            <div className="main-content">
-                <header className="app-header">
-                    <h1>Clyde Build Inspector</h1>
-                </header>
-                
-                <main className="app-content">
-                    {selectedBuild ? (
-                        <BuildDetails build={selectedBuild} />
-                    ) : (
-                        <div className="no-build-selected">
-                            Select a build to view details
-                        </div>
-                    )}
-                </main>
+            <div className="details-section">
+                {selectedNode ? (
+                    <DependencyDetails node={selectedNode} />
+                ) : selectedBuild ? (
+                    <BuildDetails build={selectedBuild} />
+                ) : (
+                    <div className="no-selection">
+                        Select a build or dependency to view details
+                    </div>
+                )}
+            </div>
+            <div className="graph-section">
+                <h2>Dependency Graph</h2>
+                <DependencyGraph onNodeSelect={handleNodeSelect} />
             </div>
         </div>
     );

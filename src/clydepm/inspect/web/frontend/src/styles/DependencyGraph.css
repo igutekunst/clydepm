@@ -66,17 +66,27 @@
 .react-flow__controls {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     border-radius: 8px;
+    overflow: hidden;
 }
 
 .react-flow__controls button {
-    border-radius: 4px;
     background: white;
-    border: 1px solid #ddd;
+    border: 1px solid #e0e0e0;
     color: #666;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .react-flow__controls button:hover {
     background: #f8f9fa;
+}
+
+.react-flow__attribution {
+    display: none;
 }
 
 .graph-container {
@@ -86,6 +96,7 @@
     background: #fff;
     border: 1px solid #e0e0e0;
     border-radius: 8px;
+    overflow: hidden;
 }
 
 .custom-node {
@@ -99,6 +110,21 @@
 
 .custom-node.has-warnings {
     border-color: #c5221f;
+    border-width: 2px;
+    background-color: #fce8e6;
+}
+
+.custom-node.has-warnings::after {
+    content: '⚠️';
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: white;
+    border-radius: 50%;
+    padding: 4px;
+    border: 2px solid #c5221f;
+    font-size: 12px;
+    line-height: 1;
 }
 
 .node-content {
@@ -127,31 +153,60 @@
     stroke-width: 2;
 }
 
-.react-flow__controls {
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    border-radius: 8px;
-}
-
-.react-flow__controls button {
-    background: #fff;
-    border: 1px solid #e0e0e0;
-    color: #666;
-}
-
-.react-flow__controls button:hover {
-    background: #f8f9fa;
-}
-
 .graph-error {
     color: #c5221f;
     padding: 20px;
     text-align: center;
+    background: #fce8e6;
+    border: 2px solid #c5221f;
+    border-radius: 8px;
+    margin: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    font-weight: 500;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+}
+
+.graph-error::before {
+    content: '⚠️';
+    font-size: 24px;
+    margin-bottom: 8px;
 }
 
 .graph-loading {
     color: #666;
     padding: 20px;
     text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 8px;
+    font-size: 1.1em;
+}
+
+.graph-loading::after {
+    content: '';
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    margin-left: 12px;
+    border: 2px solid #666;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* Force Graph Styles */
@@ -173,24 +228,37 @@
     pointer-events: none;
 }
 
-/* Loading state */
-.graph-loading::after {
-    content: '';
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    margin-left: 8px;
-    border: 2px solid #666;
-    border-right-color: transparent;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
+.graph-warnings {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
 }
 
-@keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+.graph-warning {
+    background: #fce8e6;
+    border: 2px solid #c5221f;
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: auto;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.warning-icon {
+    font-size: 16px;
+    line-height: 1;
+}
+
+.warning-message {
+    color: #c5221f;
+    font-weight: 500;
+    flex: 1;
 } 

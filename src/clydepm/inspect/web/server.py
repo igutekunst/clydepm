@@ -29,6 +29,7 @@ from .models import (
     ResolvedDependency,
     SourceFile,
     SourceTree,
+    DependencyGraph,
 )
 
 app = FastAPI(
@@ -42,7 +43,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",  # Vite dev server
-        "http://127.0.0.1:5173"   # Alternative localhost
+        "http://127.0.0.1:5173",  # Alternative localhost
+        "http://localhost:5174",  # Additional Vite port
+        "http://127.0.0.1:5174"   # Alternative localhost for 5174
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -211,14 +214,14 @@ async def get_package_details(package_name: str) -> Package:
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/dependencies/graph", response_model=GraphLayout)
-async def get_dependency_graph() -> GraphLayout:
+@app.get("/api/dependencies", response_model=DependencyGraph)
+async def get_dependency_graph() -> DependencyGraph:
     """Get the full dependency graph data."""
     try:
         # Get the latest build data
         build_files = glob.glob(str(BUILD_DATA_DIR / "build_*.json"))
         if not build_files:
-            return GraphLayout(nodes=[], edges=[], warnings=[])
+            return DependencyGraph(nodes=[], edges=[], warnings=[])
             
         # Sort by modification time to get latest
         latest_build = max(build_files, key=os.path.getmtime)
@@ -234,69 +237,97 @@ async def get_dependency_graph() -> GraphLayout:
         root_version = build_data["package"]["version"]
         root_id = f"{root_pkg.full_name}@{root_version}"
         
+        # Get metrics for the root package
+        metrics = build_data.get("metrics")
+        
+        # Check if there was a build error
+        has_error = not build_data.get("success", True) or "error" in build_data
+        error_message = build_data.get("error", "Unknown error")
+        
         nodes.append(DependencyGraphNode(
             id=root_id,
             package=root_pkg,
+            name=root_pkg.name,
             version=root_version,
             type="runtime",
             position=Position(x=0.0, y=0.0),
-            metrics=generate_build_metrics(build_data),
-            has_warnings=False
+            metrics=metrics,
+            has_warnings=has_error
         ))
         
-        # Add dependency nodes
+        if has_error:
+            warnings.append(DependencyWarning(
+                id=f"error-{root_id}",
+                package=root_pkg,
+                message=error_message,
+                level="error",
+                context={
+                    "package": root_pkg.full_name,
+                    "version": root_version,
+                    "type": "build_error"
+                }
+            ))
+            
+        # Add dependency nodes from dependency_graph if available
         y_level = 1
         processed = {root_id}
         
-        def add_dependency_node(pkg_name: str, version: str, deps: List[str], y: float) -> None:
-            pkg_id = parse_package_identifier(pkg_name)
-            node_id = f"{pkg_id.full_name}@{version}"
-            
-            if node_id in processed:
-                return
-                
-            processed.add(node_id)
-            x_pos = (len(nodes) % 3 - 1) * 1.0
-            
-            nodes.append(DependencyGraphNode(
-                id=node_id,
-                package=pkg_id,
-                version=version,
-                type="runtime",  # TODO: Detect dev dependencies
-                position=Position(x=x_pos, y=y),
-                metrics=None,  # TODO: Get metrics for dependencies
-                has_warnings=False
-            ))
-            
-            # Add edges
-            for dep in deps:
-                dep_version = build_data["dependencies"].get(dep, "unknown")
-                dep_id = f"{dep}@{dep_version}"
-                edges.append(DependencyGraphEdge(
-                    id=f"{node_id}-{dep_id}",
-                    source=node_id,
-                    target=dep_id,
-                    type="runtime"
-                ))
-                
-        # Process dependencies recursively
-        deps_to_process = [(name, build_data["dependencies"].get(name, "unknown"), deps)
-                          for name, deps in build_data.get("dependency_graph", {}).items()]
+        # Get dependencies from the dependency graph
+        dependency_graph = build_data.get("dependency_graph", {})
+        for pkg_name, deps in dependency_graph.items():
+            if pkg_name == root_pkg.name:
+                for dep_name in deps:
+                    pkg_id = parse_package_identifier(dep_name)
+                    node_id = f"{pkg_id.full_name}@unknown"
+                    
+                    if node_id not in processed:
+                        processed.add(node_id)
+                        x_pos = (len(nodes) % 3 - 1) * 1.0
+                        
+                        # Add the dependency node
+                        nodes.append(DependencyGraphNode(
+                            id=node_id,
+                            package=pkg_id,
+                            name=pkg_id.name,
+                            version="unknown",
+                            type="runtime",
+                            position=Position(x=x_pos, y=float(y_level)),
+                            metrics=None,
+                            has_warnings=True
+                        ))
+                        
+                        # Add edge from root to dependency
+                        edges.append(DependencyGraphEdge(
+                            id=f"{root_id}-{node_id}",
+                            source=root_id,
+                            target=node_id,
+                            type="runtime",
+                            is_circular=False
+                        ))
+                        
+                        # Add warning for missing dependency
+                        warnings.append(DependencyWarning(
+                            id=f"missing-{node_id}",
+                            package=pkg_id,
+                            message=f"Package {pkg_id.full_name} not found",
+                            level="error",
+                            context={
+                                "package": pkg_id.full_name,
+                                "type": "missing_package"
+                            }
+                        ))
+                        
+                        # Move to next level if we've added 3 nodes at current level
+                        if len(nodes) % 3 == 0:
+                            y_level += 1
         
-        while deps_to_process:
-            pkg_name, version, deps = deps_to_process.pop(0)
-            add_dependency_node(pkg_name, version, deps, float(y_level))
-            
-            # Move to next level if we've added 3 nodes at current level
-            if len(nodes) % 3 == 0:
-                y_level += 1
-        
-        return GraphLayout(
+        return DependencyGraph(
             nodes=nodes,
             edges=edges,
             warnings=warnings
         )
     except Exception as e:
+        print(f"Error generating dependency graph: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/builds", response_model=List[BuildData])
