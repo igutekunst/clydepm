@@ -198,7 +198,7 @@ def install(
                         if package.package_type == "application":
                             binary = build_dir / package.name
                             logger.debug(f"Installing binary: {binary}")
-                            if not installer.install_binary(binary, package.name, overwrite=force):
+                            if not installer.install_binary(binary, package.name, package.name, overwrite=force):
                                 raise typer.Exit(1)
                         progress.update(task, advance=1)
                         
@@ -207,15 +207,41 @@ def install(
                             lib_name = f"lib{package.name}.a"
                             library = build_dir / lib_name
                             logger.debug(f"Installing library: {library}")
-                            if not installer.install_library(library, lib_name, overwrite=force):
+                            if not installer.install_library(library, lib_name, package.name, overwrite=force):
                                 raise typer.Exit(1)
                             progress.update(task, advance=1)
                             
                             # Install headers - directly into include/packagename/
                             include_dir = package.path / "include"
                             logger.debug(f"Installing headers from: {include_dir}")
-                            if not installer.install_headers(include_dir, "", overwrite=force):  # Pass empty string to avoid creating packagename subdir
+                            if not installer.install_headers(include_dir, package.name, overwrite=force):
                                 raise typer.Exit(1)
+                            
+                            # Write installation metadata
+                            package_dir = installer.get_package_dir(package.name)
+                            files = {
+                                "binaries": [{"source": str(binary), "link": str(installer.bin_dir / package.name)}] if package.package_type == "application" else [],
+                                "libraries": [{"source": str(library), "link": str(installer.lib_dir / lib_name)}],
+                                "headers": [{"source": str(include_dir), "link": str(installer.include_dir / package.name)}]
+                            }
+                            
+                            # Get basic build info
+                            build_info = {
+                                "compiler": "cc",  # Default to cc for now
+                                "version": "",     # Empty for now
+                                "flags": []        # Empty list for now
+                            }
+                            
+                            # Write metadata
+                            if not installer.write_install_metadata(
+                                package_dir,
+                                package.name,
+                                package.version,
+                                files,
+                                build_info,
+                                getattr(package, 'dependencies', {})  # Default to empty dict if not present
+                            ):
+                                logger.warning("Failed to write installation metadata")
                         progress.update(task, advance=1)
                         
                     else:
@@ -248,7 +274,7 @@ def install(
                         if package.package_type == "application":
                             binary = build_dir / package.name
                             logger.debug(f"Installing binary: {binary}")
-                            if not installer.install_binary(binary, package.name, overwrite=force):
+                            if not installer.install_binary(binary, package.name, package.name, overwrite=force):
                                 raise typer.Exit(1)
                         progress.update(task, advance=1)
                         
@@ -257,14 +283,40 @@ def install(
                             lib_name = f"lib{package.name}.a"
                             library = build_dir / lib_name
                             logger.debug(f"Installing library: {library}")
-                            if not installer.install_library(library, lib_name, overwrite=force):
+                            if not installer.install_library(library, lib_name, package.name, overwrite=force):
                                 raise typer.Exit(1)
                             
                             # Install headers - directly into include/packagename/
                             include_dir = package.path / "include"
                             logger.debug(f"Installing headers from: {include_dir}")
-                            if not installer.install_headers(include_dir, "", overwrite=force):  # Pass empty string to avoid creating packagename subdir
+                            if not installer.install_headers(include_dir, package.name, overwrite=force):
                                 raise typer.Exit(1)
+                            
+                            # Write installation metadata
+                            package_dir = installer.get_package_dir(package.name)
+                            files = {
+                                "binaries": [{"source": str(binary), "link": str(installer.bin_dir / package.name)}] if package.package_type == "application" else [],
+                                "libraries": [{"source": str(library), "link": str(installer.lib_dir / lib_name)}],
+                                "headers": [{"source": str(include_dir), "link": str(installer.include_dir / package.name)}]
+                            }
+                            
+                            # Get basic build info
+                            build_info = {
+                                "compiler": "cc",  # Default to cc for now
+                                "version": "",     # Empty for now
+                                "flags": []        # Empty list for now
+                            }
+                            
+                            # Write metadata
+                            if not installer.write_install_metadata(
+                                package_dir,
+                                package.name,
+                                package.version,
+                                files,
+                                build_info,
+                                getattr(package, 'dependencies', {})  # Default to empty dict if not present
+                            ):
+                                logger.warning("Failed to write installation metadata")
                         progress.update(task, advance=1)
                     
             console.print("[green]Global installation complete![/green]")

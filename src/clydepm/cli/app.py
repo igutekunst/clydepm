@@ -14,6 +14,7 @@ from .commands.publish import publish
 from .commands.install import install
 from .commands.cache import app as cache_app
 from .commands.inspect import app as inspect_app
+from .commands.package import package_cmd
 
 # Set up logging
 logger = logging.getLogger("clydepm")
@@ -48,6 +49,8 @@ app.command()(install)
 app.add_typer(cache_app, name="cache")
 app.add_typer(inspect_app, name="inspect", help="Build inspection tools")
 
+# Add package command group
+app.add_typer(package_cmd, name="package", help="Package management commands")
 
 def main():
     """Main entry point for CLI."""
