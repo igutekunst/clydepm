@@ -161,6 +161,11 @@ def graph(
     format: OutputFormat = typer.Option(
         OutputFormat.PNG,
         help="Output format for the graph visualization"
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose", "-v",
+        help="Enable verbose logging"
     )
 ) -> None:
     """Visualize package dependencies."""
@@ -172,8 +177,8 @@ def graph(
             console.print("[red]Error:[/red] No package.yml found in current directory")
             raise typer.Exit(1)
             
-        # Create dependency resolver
-        resolver = DependencyResolver()
+        # Create dependency resolver with verbose mode if requested
+        resolver = DependencyResolver(verbose=verbose)
         
         # Add package and its dependencies
         with Progress(
@@ -182,8 +187,17 @@ def graph(
             console=console,
         ) as progress:
             task = progress.add_task("Resolving dependencies...", total=None)
-            resolver.add_package(package)
-            progress.update(task, completed=True)
+            try:
+                resolver.add_package(package)
+                progress.update(task, completed=True)
+            except ValueError as e:
+                progress.update(task, completed=True)
+                console.print(f"[red]Error resolving dependencies:[/red] {str(e)}")
+                if verbose:
+                    console.print("\nFor more details about the dependency resolution process, check the logs above.")
+                else:
+                    console.print("\nRun with -v flag to see detailed dependency resolution logs.")
+                raise typer.Exit(1)
             
             # Check for cycles
             cycles = resolver.detect_cycles()
@@ -205,6 +219,7 @@ def graph(
                     progress.update(task, completed=True)
                     console.print("[green]✓[/green] Opening graph in default viewer...")
             except RuntimeError as e:
+                progress.update(task, completed=True)
                 console.print(f"[red]Error:[/red] {str(e)}")
                 console.print("Please install Graphviz to generate dependency graphs:")
                 console.print("  macOS: brew install graphviz")
@@ -214,6 +229,12 @@ def graph(
             
     except Exception as e:
         console.print(f"[red]Error:[/red] {str(e)}")
+        if verbose:
+            import traceback
+            console.print("\n[red]Traceback:[/red]")
+            console.print(traceback.format_exc())
+        else:
+            console.print("\nRun with -v flag to see detailed error information.")
         raise typer.Exit(1)
 
 

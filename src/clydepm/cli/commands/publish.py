@@ -57,6 +57,36 @@ def publish(
             organization = config.get("organization")
             logger.debug("Using organization from config: %s", organization)
             
+        # Validate package name format
+        if organization:
+            expected_prefix = f"@{organization}/"
+            if not package.name.startswith(expected_prefix):
+                error_msg = (
+                    f"[red]Error:[/red] Package name must include organization prefix\n"
+                    f"Current name: {package.name}\n"
+                    f"Expected format: {expected_prefix}<package-name>\n\n"
+                    f"To fix this:\n"
+                    f"1. Update the name in [bold]package.yml[/bold]:\n"
+                    f"   name: {expected_prefix}{package.name}\n"
+                )
+                rprint(error_msg)
+                sys.exit(1)
+        elif "/" in package.name:
+            # If no organization is configured but name has a scope
+            org = package.name.split("/")[0][1:]  # Remove @ from org
+            error_msg = (
+                f"[red]Error:[/red] Package name includes organization '{org}' but no organization is configured\n\n"
+                f"To fix this, either:\n"
+                f"1. Configure the organization in [bold]~/.clyde/config.yml[/bold]:\n"
+                f"   organization: {org}\n"
+                f"2. Or specify the organization when publishing:\n"
+                f"   clyde publish --org {org}\n"
+                f"3. Or remove the organization prefix from the package name in [bold]package.yml[/bold]:\n"
+                f"   name: {package.name.split('/')[1]}\n"
+            )
+            rprint(error_msg)
+            sys.exit(1)
+            
         # Create registry with token and organization
         logger.debug("Creating GitHub registry with organization %s", organization)
         registry = GitHubRegistry(token, organization)

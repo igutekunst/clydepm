@@ -187,4 +187,58 @@ def test_dependency_graph_export(temp_package_tree):
     # Check organization info
     assert graph["nodes"]["@org1/lib1"]["organization"] == "org1"
     assert graph["nodes"]["@org2/lib2"]["organization"] == "org2"
-    assert graph["nodes"]["root-pkg"]["organization"] is None 
+    assert graph["nodes"]["root-pkg"]["organization"] is None
+
+@pytest.fixture
+def temp_missing_package_tree(tmp_path):
+    """Create a temporary package tree with a missing dependency."""
+    # Create root package
+    root = tmp_path / "root"
+    root.mkdir()
+    with open(root / "package.yml", "w") as f:
+        f.write("""
+name: root-pkg
+version: 1.0.0
+type: application
+language: c
+sources:
+    - src/main.c
+requires:
+    "@igutekunst/ooc": "^1.0.0"
+""")
+    return root
+
+def test_missing_scoped_dependency(temp_missing_package_tree):
+    """Test handling of missing scoped dependencies."""
+    root_pkg = Package(temp_missing_package_tree)
+    resolver = DependencyResolver(verbose=True)
+    
+    # The resolver should raise a ValueError with details about the missing dependency
+    with pytest.raises(ValueError) as exc_info:
+        resolver.add_package(root_pkg)
+    
+    error_msg = str(exc_info.value)
+    assert "@igutekunst/ooc" in error_msg
+    assert "deps/igutekunst/ooc" in error_msg  # Should show the attempted path
+
+def test_dependency_node_access(temp_package_tree):
+    """Test that node access in the dependency graph is correct."""
+    root_pkg = Package(temp_package_tree)
+    resolver = DependencyResolver(verbose=True)
+    
+    # Add the root package
+    resolver.add_package(root_pkg)
+    
+    # Verify that we can access the nodes correctly
+    assert "root-pkg" in resolver.nodes
+    assert "@org1/lib1" in resolver.nodes
+    assert "@org2/lib2" in resolver.nodes
+    
+    # Verify that we can access the dependents and dependencies
+    assert resolver.nodes["root-pkg"].dependencies == {"@org1/lib1", "@org2/lib2"}
+    assert resolver.nodes["@org1/lib1"].dependencies == {"@org2/lib2"}
+    assert resolver.nodes["@org2/lib2"].dependencies == set()
+    
+    assert resolver.nodes["@org1/lib1"].dependents == {"root-pkg"}
+    assert resolver.nodes["@org2/lib2"].dependents == {"root-pkg", "@org1/lib1"}
+    assert resolver.nodes["root-pkg"].dependents == set() 

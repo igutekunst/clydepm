@@ -510,14 +510,21 @@ def install(
                         package = registry.get_package(name, version or "latest")
                         progress.update(task, advance=1)
                         
-                        # Install into deps directory
-                        package_dir = deps_dir / name
+                        # Install into deps directory with organization prefix
+                        if org:
+                            package_dir = deps_dir / org / name
+                        else:
+                            package_dir = deps_dir / name
+                            
                         if package_dir.exists():
                             if not force:
                                 console.print(f"\n[yellow]Warning:[/yellow] Package {name} is already installed")
                                 if not typer.confirm("Do you want to overwrite it?"):
                                     continue
                             shutil.rmtree(package_dir)
+                            
+                        # Create parent directories if needed
+                        package_dir.parent.mkdir(parents=True, exist_ok=True)
                             
                         # Copy package files
                         shutil.copytree(package.path, package_dir)

@@ -16,6 +16,9 @@ llm_instructions:
   - "Consider future extensibility"
   - "Ensure changes align with roadmap"
   - "Suggest updating .cursorrules when making changes"
+  - "When making changes, consider how they will affect the codebase in the future"
+  - "When making changes, ensure at least core functionality is tested, creating new tests as needed"
+  - "When making changes, run all the tests to ensure they pass"
   - "Read docs/docs/ to understand Clyde's configuration and conventions (e.g. package.yml)"
 
 # Language and Library Standards

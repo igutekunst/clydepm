@@ -137,7 +137,7 @@ class Package:
     
     @property
     def name(self) -> str:
-        """Get package name."""
+        """Get full package name including organization if present."""
         return self._validated_config.name
     
     @property
@@ -390,7 +390,8 @@ class Package:
         """Get package organization if it exists."""
         name = self._validated_config.name
         if name.startswith('@'):
-            return name.split('/')[0][1:]  # Remove @ and get org name
+            org, _ = name.split('/', 1)
+            return org[1:]  # Remove @ from org name
         return None
 
     @property
@@ -398,7 +399,8 @@ class Package:
         """Get package name without organization prefix."""
         name = self._validated_config.name
         if name.startswith('@'):
-            return name.split('/')[1]
+            _, pkg = name.split('/', 1)
+            return pkg
         return name
 
     def get_dependency_path(self, name: str) -> Path:
