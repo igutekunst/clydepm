@@ -11,7 +11,6 @@ from .commands.build import build
 from .commands.run import run
 from .commands.auth import auth
 from .commands.publish import publish
-from .commands.install import install
 from .commands.cache import app as cache_app
 from .commands.inspect import app as inspect_app
 from .commands.package import package_cmd
@@ -43,7 +42,6 @@ app.command()(build)
 app.command()(run)
 app.command()(auth)
 app.command()(publish)
-app.command()(install)
 
 # Add subcommands
 app.add_typer(cache_app, name="cache")
