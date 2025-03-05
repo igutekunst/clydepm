@@ -63,6 +63,8 @@ nav:
     - Build System: architecture/build-system.md
     - Cache System: architecture/cache-system.md
     - CLI Design: architecture/cli-design.md
+    - Build System Refactor: architecture/build-system-refactor.md
+    - Hook System: architecture/hook-system.md
   - Development:
     - Contributing: development/contributing.md
     - Roadmap: development/roadmap.md
