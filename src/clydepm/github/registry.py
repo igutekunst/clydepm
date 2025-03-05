@@ -187,7 +187,7 @@ class GitHubRegistry:
         """Create a new GitHub repository for the package.
         
         Args:
-            package_name: Name of the package/repository
+            package_name: Name of the package/repository (without @org/ prefix)
             private: Whether the repository should be private
             
         Returns:
@@ -198,20 +198,26 @@ class GitHubRegistry:
         """
         try:
             logger.debug("Creating repository %s (private=%s)", package_name, private)
+            
+            # Create in organization if specified, otherwise in user account
             if self.organization:
-                org = self.session.get(f"https://api.github.com/orgs/{self.organization}").json()
-                return org.create_repo(
-                    name=package_name,
-                    private=private,
-                    auto_init=False  # Don't initialize with README since we'll push existing code
-                )
+                create_url = f"https://api.github.com/orgs/{self.organization}/repos"
             else:
-                return self.session.get(f"https://api.github.com/user/repos").json()[0].create_repo(
-                    name=package_name,
-                    private=private,
-                    auto_init=False
-                )
-        except GithubException as e:
+                create_url = "https://api.github.com/user/repos"
+                
+            create_data = {
+                "name": package_name,
+                "private": private,
+                "auto_init": False  # Don't initialize with README since we'll push existing code
+            }
+            
+            response = self.session.post(create_url, json=create_data)
+            if response.status_code != 201:
+                raise ValueError(f"Failed to create repository: {response.text}")
+            
+            return response.json()
+            
+        except Exception as e:
             logger.error("Failed to create repository %s: %s", package_name, e)
             raise ValueError(f"Failed to create repository {package_name}: {e}")
 
@@ -223,84 +229,40 @@ class GitHubRegistry:
             # First try to get existing repo
             logger.debug("Getting repository for package %s", package_name)
             
+            # Strip @org/ prefix if present to get the actual repo name
+            if package_name.startswith('@') and '/' in package_name:
+                repo_name = package_name.split('/', 1)[1]
+            else:
+                repo_name = package_name
+                
+            logger.debug("Using repository name: %s", repo_name)
+            
             # Try both org and user contexts to find the repo
             repo = None
             
             # If organization is specified, try that first
             if self.organization:
-                response = self.session.get(f"https://api.github.com/repos/{self.organization}/{package_name}")
-                if response.status_code == 200:
-                    repo = response.json()
-                    logger.debug("Found repository in organization %s", self.organization)
-            
-            # If no org or repo not found in org, try user's repos
-            if not repo:
-                # First get the authenticated user
-                user_response = self.session.get("https://api.github.com/user")
-                if user_response.status_code != 200:
-                    raise ValueError("Failed to get authenticated user. Please check your GitHub token.")
-                
-                user = user_response.json()
-                username = user['login']
-                
-                # Try to find repo in user's account
-                response = self.session.get(f"https://api.github.com/repos/{username}/{package_name}")
-                if response.status_code == 200:
-                    repo = response.json()
-                    # If no organization was specified, use the username
-                    if not self.organization:
-                        self.organization = username
-                    logger.debug("Found repository in user account")
-                
-            # If repo still not found, create it
-            if not repo:
-                logger.warning("Repository %s not found, will create it", package_name)
-                # Create in organization if specified, otherwise in user account
-                if self.organization:
-                    create_url = f"https://api.github.com/orgs/{self.organization}/repos"
-                else:
-                    create_url = "https://api.github.com/user/repos"
-                    
-                create_data = {
-                    "name": package_name,
-                    "private": False,
-                    "auto_init": False
-                }
-                
-                response = self.session.post(create_url, json=create_data)
-                if response.status_code != 201:
-                    raise ValueError(f"Failed to create repository: {response.text}")
-                
-                repo = response.json()
-                if not self.organization:
-                    self.organization = repo['owner']['login']
-            
-            # Check local git repo and remote
-            try:
-                git_repo = git.Repo(os.getcwd())
-                
-                # Check if remote exists
                 try:
-                    origin = git_repo.remote("origin")
-                    current_url = origin.url
-                    
-                    # Construct expected SSH URL
-                    expected_url = f"git@github.com:{self.organization}/{package_name}.git"
-                        
-                    if current_url != expected_url:
-                        logger.info("Updating remote URL from %s to %s", current_url, expected_url)
-                        origin.set_url(expected_url)
-                except ValueError:
-                    # Remote doesn't exist, create it
-                    logger.info("Creating origin remote")
-                    url = f"git@github.com:{self.organization}/{package_name}.git"
-                    git_repo.create_remote("origin", url)
-                
-            except git.InvalidGitRepositoryError:
-                logger.warning("Not in a git repository, skipping remote setup")
+                    url = f"https://api.github.com/repos/{self.organization}/{repo_name}"
+                    response = self.session.get(url)
+                    if response.status_code == 200:
+                        return response.json()
+                except Exception as e:
+                    logger.debug("Failed to get repo from org context: %s", e)
             
-            return repo
-        
+            # Try user context as fallback
+            try:
+                url = f"https://api.github.com/repos/{self.organization}/{repo_name}"
+                response = self.session.get(url)
+                if response.status_code == 200:
+                    return response.json()
+            except Exception as e:
+                logger.debug("Failed to get repo from user context: %s", e)
+            
+            # If we get here, repo doesn't exist
+            logger.warning("Repository %s not found, will create it", package_name)
+            return self.create_repo(repo_name).raw_data
+            
         except Exception as e:
             logger.error("Failed to get/create repository %s: %s", package_name, e)
             raise ValueError(f"Failed to access repository {package_name}: {e}")
@@ -359,9 +321,15 @@ class GitHubRegistry:
         repo = self._get_repo(package.name)
         owner = repo['owner']['login']
 
+        # Strip @org/ prefix if present to get the actual repo name
+        if package.name.startswith('@') and '/' in package.name:
+            repo_name = package.name.split('/', 1)[1]
+        else:
+            repo_name = package.name
+
         # Check if release already exists
         try:
-            response = self.session.get(f"https://api.github.com/repos/{owner}/{package.name}/releases/tags/v{package.version}")
+            response = self.session.get(f"https://api.github.com/repos/{owner}/{repo_name}/releases/tags/v{package.version}")
             if response.status_code == 200:
                 existing_release = response.json()
                 logger.error("Version %s already exists", package.version)
@@ -385,7 +353,7 @@ class GitHubRegistry:
 
         # Create source tarball
         with tempfile.TemporaryDirectory() as temp_dir:
-            tarball_path = Path(temp_dir) / f"{package.name}-{package.version}.tar.gz"
+            tarball_path = Path(temp_dir) / f"{repo_name}-{package.version}.tar.gz"
             logger.debug("Creating source tarball at %s", tarball_path)
             
             # Create tarball excluding .git, __pycache__, etc.
@@ -402,7 +370,7 @@ class GitHubRegistry:
                             return None
                     return tarinfo
                 
-                tar.add(package.path, arcname=package.name, filter=filter_func)
+                tar.add(package.path, arcname=repo_name, filter=filter_func)
         
             try:
                 # Create release using GitHub API
@@ -415,7 +383,7 @@ class GitHubRegistry:
                     "prerelease": False
                 }
                 response = self.session.post(
-                    f"https://api.github.com/repos/{owner}/{package.name}/releases",
+                    f"https://api.github.com/repos/{owner}/{repo_name}/releases",
                     json=release_data
                 )
                 response.raise_for_status()
@@ -425,12 +393,12 @@ class GitHubRegistry:
                 logger.debug("Uploading source package %s", tarball_path)
                 with open(tarball_path, "rb") as f:
                     files = {
-                        "file": (f"{package.name}-{package.version}.tar.gz", f, "application/gzip")
+                        "file": (f"{repo_name}-{package.version}.tar.gz", f, "application/gzip")
                     }
                     response = self.session.post(
                         release["upload_url"].replace("{?name,label}", ""),
                         files=files,
-                        params={"name": f"{package.name}-{package.version}.tar.gz"}
+                        params={"name": f"{repo_name}-{package.version}.tar.gz"}
                     )
                     response.raise_for_status()
                 
@@ -443,7 +411,7 @@ class GitHubRegistry:
                         with open(binary_path, "rb") as f:
                             files = {
                                 "file": (
-                                    f"{package.name}-{package.version}-{package.build_metadata.get_hash()}.tar.gz",
+                                    f"{repo_name}-{package.version}-{package.build_metadata.get_hash()}.tar.gz",
                                     f,
                                     "application/gzip"
                                 )
@@ -452,7 +420,7 @@ class GitHubRegistry:
                                 release["upload_url"].replace("{?name,label}", ""),
                                 files=files,
                                 params={
-                                    "name": f"{package.name}-{package.version}-{package.build_metadata.get_hash()}.tar.gz"
+                                    "name": f"{repo_name}-{package.version}-{package.build_metadata.get_hash()}.tar.gz"
                                 }
                             )
                             response.raise_for_status()
@@ -488,17 +456,38 @@ class GitHubRegistry:
     def get_versions(self, name: str) -> List[Version]:
         """Get available versions for package."""
         logger.debug("Getting versions for package %s", name)
+        versions = []
+        
         try:
-            repo = self._get_repo(name)
-            versions = []
-            for release in repo.get_releases():
-                try:
-                    # Strip 'v' prefix if present and parse as Version
-                    version_str = release.tag_name.lstrip("v")
-                    versions.append(Version.parse(version_str))
-                except ValueError:
-                    logger.warning("Invalid version tag: %s", release.tag_name)
-                    continue
+            # First check releases
+            releases_url = f"https://api.github.com/repos/{self.organization}/{name}/releases"
+            response = self.session.get(releases_url)
+            if response.status_code == 200:
+                releases = response.json()
+                for release in releases:
+                    try:
+                        # Strip 'v' prefix if present and parse as Version
+                        version_str = release["tag_name"].lstrip("v")
+                        versions.append(Version.parse(version_str))
+                    except ValueError:
+                        logger.warning("Invalid version tag: %s", release["tag_name"])
+                        continue
+                    
+            # Then check tags
+            tags_url = f"https://api.github.com/repos/{self.organization}/{name}/tags"
+            response = self.session.get(tags_url)
+            if response.status_code == 200:
+                tags = response.json()
+                for tag in tags:
+                    try:
+                        # Strip 'v' prefix if present and parse as Version
+                        version_str = tag["name"].lstrip("v")
+                        if Version.parse(version_str) not in versions:  # Avoid duplicates if tag matches release
+                            versions.append(Version.parse(version_str))
+                    except ValueError:
+                        logger.warning("Invalid version tag: %s", tag["name"])
+                        continue
+                    
             logger.debug("Found versions: %s", versions)
             return sorted(versions)  # Version class implements proper comparison
         except Exception as e:

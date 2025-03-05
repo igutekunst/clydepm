@@ -96,13 +96,23 @@ def get_authenticated_client() -> Tuple[Github, Optional[str]]:
             "No GitHub token configured. Run 'clyde auth' to set up GitHub authentication."
         )
     
-    # Validate token
-    if not validate_token(token):
+    # Create client
+    client = Github(token)
+    
+    # Validate token and get user info
+    try:
+        user = client.get_user()
+        username = user.login
+        
+        # Use configured organization or fall back to username
+        organization = config.get('organization') or username
+        
+        return client, organization
+    except Exception as e:
         raise GitHubConfigError(
             "Invalid GitHub token. Run 'clyde auth' to update your GitHub authentication."
-        )
-    
-    return Github(token), config.get('organization') 
+        ) from e
+
 
 def get_github_token() -> Optional[str]:
     """Get GitHub token from environment or config."""

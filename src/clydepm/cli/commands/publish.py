@@ -1,4 +1,4 @@
-from clydepm.github.config import load_config, GitHubConfigError, get_github_token
+from clydepm.github.config import load_config, GitHubConfigError, get_github_token, get_authenticated_client
 from clydepm.github.registry import GitHubRegistry
 from clydepm.core.package import Package
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -50,13 +50,13 @@ def publish(
         logger.debug("Creating package from path %s", path)
         package = Package(path)
         
-        # Load config for organization if not specified
-        if not organization:
-            logger.debug("Loading organization from config")
-            config = load_config()
-            organization = config.get("organization")
-            logger.debug("Using organization from config: %s", organization)
-            
+        # Get authenticated client and organization
+        client, default_org = get_authenticated_client()
+        
+        # Use specified organization or default from authenticated user
+        organization = organization or default_org
+        logger.debug("Using organization: %s", organization)
+        
         # Validate package name format
         if organization:
             expected_prefix = f"@{organization}/"

@@ -378,12 +378,25 @@ class Package:
         """Get the build directory for this package."""
         return self.path / ".build"
 
-    def get_output_path(self) -> Path:
-        """Get the output path for this package's artifacts."""
-        if self.package_type == PackageType.LIBRARY:
-            return self.get_build_dir() / f"lib{self.name}.a"
+    def get_output_path(self, parent_package: Optional["Package"] = None) -> Path:
+        """Get the output path for this package's artifacts.
+        
+        Args:
+            parent_package: If this is a dependency, the package that depends on it
+            
+        Returns:
+            Path to the output artifact
+        """
+        # Get build directory - use parent's build/deps directory if this is a dependency
+        if parent_package:
+            build_dir = parent_package.get_build_path(self._validated_config.name)
         else:
-            return self.get_build_dir() / self.name 
+            build_dir = self.get_build_dir()
+            
+        if self.package_type == PackageType.LIBRARY:
+            return build_dir / f"lib{self.package_name}.a"
+        else:
+            return build_dir / self.name
 
     @property
     def organization(self) -> Optional[str]:
@@ -414,7 +427,7 @@ class Package:
         """
         if name.startswith('@'):
             # For @org/pkg format, create deps/@org/pkg
-            org = name.split('/')[0][1:]  # Remove @ from org
+            org = name.split('/')[0]  # Keep the @ in org
             pkg = name.split('/')[1]
             return self.path / "deps" / org / pkg
         else:
@@ -432,12 +445,12 @@ class Package:
         """
         if name.startswith('@'):
             # For @org/pkg format, create build/deps/@org/pkg
-            org = name.split('/')[0][1:]  # Remove @ from org
+            org = name.split('/')[0]  # Keep the @ in org
             pkg = name.split('/')[1]
             return self.path / "build" / "deps" / org / pkg
         else:
             # For backward compatibility, use build/deps/pkg
-            return self.path / "build" / "deps" / name 
+            return self.path / "build" / "deps" / name
 
     def get_all_headers(self) -> Dict[str, Path]:
         """Get all header files in package.

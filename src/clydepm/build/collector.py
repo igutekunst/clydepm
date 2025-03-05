@@ -179,8 +179,9 @@ class BuildDataCollector:
         else:
             self.current_build.success = True
             
-        # Save build data
-        build_file = self.output_dir / f"build_{context.package.name}_{int(time.time())}.json"
+        # Save build data - replace / with _ in package name for safe filename
+        safe_name = context.package.name.replace('/', '_')
+        build_file = self.output_dir / f"build_{safe_name}_{int(time.time())}.json"
         with open(build_file, 'w') as f:
             json.dump(self.current_build.to_json(), f, indent=2)
             

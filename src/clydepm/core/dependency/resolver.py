@@ -33,6 +33,41 @@ class DependencyResolver:
         if verbose:
             logger.setLevel(logging.DEBUG)
         
+    def _validate_package_name(self, package: Package, dep_path: Path) -> None:
+        """Validate that a package's name matches its installation path.
+        
+        Args:
+            package: Package to validate
+            dep_path: Path where the package is installed
+            
+        Raises:
+            ValueError: If package name doesn't match installation path
+        """
+        # Only validate packages in deps/ directory
+        if "deps" not in str(dep_path):
+            return
+            
+        # Get the expected name from the path
+        rel_path = dep_path.relative_to(dep_path.parent.parent.parent)  # Get path relative to deps/
+        expected_name = str(rel_path)
+        
+        if package.name != expected_name:
+            error_msg = (
+                f"Package name mismatch:\n"
+                f"  Installed at: deps/{expected_name}\n"
+                f"  But package.yml has name: {package.name}\n"
+                f"This can happen if:\n"
+                f"  1. The package was installed incorrectly\n"
+                f"  2. The package.yml was modified after installation\n"
+                f"  3. The package name was changed without updating the directory structure\n"
+                f"\nTo fix this:\n"
+                f"  1. Make sure the package name in package.yml matches its installation path\n"
+                f"  2. For scoped packages, the name should include the organization (e.g. '@org/pkg')\n"
+                f"  3. The directory structure should match the package name (e.g. 'deps/@org/pkg')"
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
     def add_package(self, package: Package, root_path: Optional[Path] = None) -> None:
         """Add package and all its dependencies to the graph.
         
@@ -68,8 +103,8 @@ class DependencyResolver:
             dep_paths = []
             
             if dep_name.startswith("@"):
-                # New format: @org/pkg -> deps/org/pkg
-                org = dep_name.split("/")[0][1:]  # Remove @ from org
+                # New format: @org/pkg -> deps/@org/pkg
+                org = dep_name.split("/")[0]  # Keep the @ in org
                 pkg = dep_name.split("/")[1]
                 dep_path = search_path / "deps" / org / pkg
                 logger.debug(f"Checking scoped path: {dep_path}")
@@ -90,6 +125,8 @@ class DependencyResolver:
                     try:
                         logger.debug(f"Found package.yml, attempting to load package")
                         dep_pkg = Package(dep_path)
+                        # Validate package name matches its path
+                        self._validate_package_name(dep_pkg, dep_path)
                         # Use the full package name for comparison
                         if dep_pkg.name == dep_name:
                             logger.debug(f"Successfully loaded package {dep_name}")
@@ -104,7 +141,14 @@ class DependencyResolver:
             
             if dep_pkg is None:
                 paths_str = "\n  - ".join(str(p) for p in dep_paths)
-                error_msg = f"Dependency {dep_name} not found. Tried:\n  - {paths_str}"
+                error_msg = (
+                    f"Dependency '{dep_name}' not found in any of these locations:\n"
+                    f"  - {paths_str}\n"
+                    f"This could mean:\n"
+                    f"  1. The package hasn't been installed (run 'clyde install')\n"
+                    f"  2. The package name is incorrect in package.yml\n"
+                    f"  3. The package version doesn't match the requirement: {dep_spec}"
+                )
                 logger.error(error_msg)
                 raise ValueError(error_msg)
             
@@ -285,7 +329,7 @@ class DependencyResolver:
             # Extract organization if present
             org = None
             if name.startswith("@"):
-                org = name.split("/")[0][1:]
+                org = name.split("/")[0]
                 logger.debug(f"Found organization {org} for node {name}")
                 
             # Set node color based on package type

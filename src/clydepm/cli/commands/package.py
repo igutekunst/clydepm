@@ -349,7 +349,7 @@ def check_existing_files(installer: GlobalInstaller, package: Package) -> Set[Pa
     # Check library and headers
     if package.package_type in ["library", "application"]:
         # Library
-        lib_name = f"lib{package.name}.a"
+        lib_name = f"lib{package.package_name}.a"
         lib_path = installer.lib_dir / lib_name
         if lib_path.exists() or lib_path.is_symlink():
             existing.add(lib_path)
@@ -651,7 +651,7 @@ def install(
                         
                         if package.package_type in ["library", "application"]:
                             # Install library
-                            lib_name = f"lib{package.name}.a"
+                            lib_name = f"lib{package.package_name}.a"
                             library = build_dir / lib_name
                             logger.debug(f"Installing library: {library}")
                             if not installer.install_library(library, lib_name, package.name, overwrite=force):
@@ -743,7 +743,7 @@ def install(
                         
                         if package.package_type in ["library", "application"]:
                             # Install library
-                            lib_name = f"lib{package.name}.a"
+                            lib_name = f"lib{package.package_name}.a"
                             library = build_dir / lib_name
                             logger.debug(f"Installing library: {library}")
                             if not installer.install_library(library, lib_name, package.name, overwrite=force):

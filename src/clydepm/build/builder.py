@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from enum import Enum, auto
 
 from ..core.package import Package, PackageType, CompilerInfo, BuildMetadata
+from ..github.registry import GitHubRegistry
+from ..core.version.version import Version
 from .cache import BuildCache
 from .hooks import BuildHookManager, BuildStage, BuildContext
 from .collector import BuildDataCollector
@@ -146,14 +148,12 @@ class Builder:
         # Add include paths, making them relative when possible
         for include_path in build_metadata.includes:
             try:
-                # Only add the base include directory, not package-specific subdirs
-                if include_path.name == "include":
-                    rel_include = os.path.relpath(include_path)
-                    cmd.extend(["-I", rel_include])
+                # Always add include paths - they should already be properly namespaced
+                rel_include = os.path.relpath(include_path)
+                cmd.extend(["-I", rel_include])
             except ValueError:
                 # Path is on different drive/root, use absolute
-                if include_path.name == "include":
-                    cmd.extend(["-I", str(include_path)])
+                cmd.extend(["-I", str(include_path)])
         
         # Update context with command
         context.command = cmd
@@ -310,32 +310,182 @@ class Builder:
                 logger.error("[LINK ERROR] %s", error_msg)
                 return error_msg
 
+    def _ensure_dependencies(
+        self,
+        package: Package,
+        context: BuildContext
+    ) -> Optional[str]:
+        """Ensure all dependencies are installed.
+        
+        Returns:
+            Error message if failed, None if successful
+        """
+        try:
+            deps = package.get_dependencies()
+            if not deps:
+                return None
+                
+            logger.info("Checking dependencies...")
+            
+            # First check if deps directory exists
+            deps_dir = package.path / "deps"
+            deps_dir.mkdir(exist_ok=True)
+            
+            # Get GitHub token and organization
+            from ..github.config import get_github_token, load_config
+            token = get_github_token()
+            if not token:
+                return "No GitHub token configured. Run 'clyde auth' to set up GitHub authentication"
+                
+            # Create registries dict to cache registries by username/org
+            registries = {}
+            
+            # Check each dependency
+            for name, version_spec in deps.items():
+                if not version_spec.startswith("local:"):
+                    # For @org/pkg format, extract org and package name
+                    if name.startswith('@'):
+                        org = name.split('/')[0][1:]  # Remove @ from org
+                        pkg_name = name.split('/')[1]
+                    else:
+                        # Use package's organization as fallback
+                        org = package.organization
+                        if not org:
+                            config = load_config()
+                            org = config.get("organization")
+                        pkg_name = name
+                        
+                    # Get or create registry for this org
+                    if org not in registries:
+                        registries[org] = GitHubRegistry(token, org)
+                    registry = registries[org]
+                    
+                    dep_path = package.get_dependency_path(name)
+                    if not dep_path.exists():
+                        logger.info(f"Installing {name} {version_spec}")
+                        
+                        # Get all available versions
+                        available_versions = registry.get_versions(pkg_name)
+                        if not available_versions:
+                            return f"No versions found for package {name}"
+                            
+                        # Find best matching version
+                        if version_spec.startswith('^'):
+                            # For ^x.y.z, find highest compatible version
+                            base_version = Version.parse(version_spec[1:])
+                            compatible_versions = [v for v in available_versions if v.is_compatible_with(base_version)]
+                            if not compatible_versions:
+                                return f"No compatible versions found for {name}@{version_spec}"
+                            target_version = str(max(compatible_versions))
+                        else:
+                            # For exact version, find exact match
+                            target_version = version_spec
+                            
+                        # Get package with resolved version
+                        dep_pkg = registry.get_package(pkg_name, target_version)
+                        
+                        # Create parent directories if needed
+                        dep_path.parent.mkdir(parents=True, exist_ok=True)
+                        # Copy package files
+                        import shutil
+                        shutil.copytree(dep_pkg.path, dep_path)
+                    else:
+                        # Verify installed version matches
+                        dep_pkg = Package(dep_path)
+                        if not dep_pkg.is_compatible_with(version_spec):
+                            logger.info(f"Updating {name} to match {version_spec}")
+                            
+                            # Get all available versions
+                            available_versions = registry.get_versions(pkg_name)
+                            if not available_versions:
+                                return f"No versions found for package {name}"
+                                
+                            # Find best matching version
+                            if version_spec.startswith('^'):
+                                # For ^x.y.z, find highest compatible version
+                                base_version = Version.parse(version_spec[1:])
+                                compatible_versions = [v for v in available_versions if v.is_compatible_with(base_version)]
+                                if not compatible_versions:
+                                    return f"No compatible versions found for {name}@{version_spec}"
+                                target_version = str(max(compatible_versions))
+                            else:
+                                # For exact version, find exact match
+                                target_version = version_spec
+                                
+                            # Get package with resolved version
+                            new_pkg = registry.get_package(pkg_name, target_version)
+                            
+                            # Remove old package
+                            import shutil
+                            shutil.rmtree(dep_path)
+                            # Copy new package files
+                            shutil.copytree(new_pkg.path, dep_path)
+                            
+            return None
+        except Exception as e:
+            error_msg = f"Failed to install dependencies: {str(e)}"
+            logger.error(error_msg)
+            return error_msg
+            
     def _build_dependencies(
         self,
         package: Package,
-        traits: Optional[Dict[str, str]] = None,
-        verbose: bool = False
+        context: BuildContext
     ) -> Optional[str]:
-        """Build all dependencies of a package.
+        """Build all dependencies in the correct order.
         
         Returns:
-            Error message if any dependency build failed, None if all successful
+            Error message if failed, None if successful
         """
-        # Build all dependencies (both local and remote)
-        for dep in package.get_all_dependencies():
-            logger.debug("[DEPENDENCY] Building %s %s", dep.name, dep.version)
-            result = self.build(dep, traits, verbose)
-            if not result.success:
-                error_msg = f"Failed to build dependency {dep.name}: {result.error}"
-                logger.error("[DEPENDENCY ERROR] %s", error_msg)
-                return error_msg
-        return None
+        try:
+            # Create dependency resolver
+            from ..core.dependency.resolver import DependencyResolver
+            resolver = DependencyResolver(verbose=context.verbose)
+            
+            try:
+                # Add package and its dependencies to the graph
+                resolver.add_package(package)
+            except ValueError as e:
+                # This is likely a dependency not found error
+                return str(e)  # Return the detailed error from resolver
+                
+            try:
+                # Get build order (this will also check for cycles)
+                build_order = resolver.get_build_order()
+            except ValueError as e:
+                return str(e)  # This will include cycle detection errors
+                
+            # Build each dependency in order
+            for dep in build_order[:-1]:  # Skip the last one (it's the root package)
+                logger.info(f"Building dependency: {dep.name}")
+                
+                # Create build context for dependency
+                dep_context = BuildContext(
+                    package=dep,
+                    build_metadata=dep.create_build_metadata(context.build_metadata.compiler),
+                    traits=context.traits,
+                    verbose=context.verbose
+                )
+                
+                # Build the dependency, passing the parent package
+                result = self.build(dep, traits=context.traits, verbose=context.verbose, parent_package=package)
+                if not result.success:
+                    # Get the build directory for better error messages
+                    build_dir = package.get_build_path(dep.name)
+                    return result.error  # Just return the error, don't wrap it again
+                    
+            return None
+        except Exception as e:
+            error_msg = f"Failed to build dependencies: {str(e)}"
+            logger.error(error_msg)
+            return error_msg
 
-    def _build_package(self, context: BuildContext) -> BuildResult:
+    def _build_package(self, context: BuildContext, parent_package: Optional[Package] = None) -> BuildResult:
         """Build a package after dependencies are built.
         
         Args:
             context: Build context
+            parent_package: If building a dependency, the package that depends on this one
             
         Returns:
             BuildResult indicating success/failure and artifacts
@@ -343,15 +493,17 @@ class Builder:
         try:
             # Get source files and make paths relative to build dir
             sources = context.package.get_source_files()
+            logger.debug(f"Found source files for {context.package.name}: {sources}")
+            
             if not sources:
-                return BuildResult(
-                    success=False,
-                    error=f"No source files found in {os.path.relpath(context.package.path/'src')}"
-                )
+                error_msg = f"No source files found for {context.package.name} in {os.path.relpath(context.package.path/'src')}"
+                logger.error(error_msg)
+                return BuildResult(success=False, error=error_msg)
                 
             # Compile each source file
             objects = []
             for source in sources:
+                logger.debug(f"Compiling source file: {source}")
                 # Use relative paths for object files
                 object_path = Path(f"{source.stem}.o")
                 error = self._compile_source(
@@ -363,16 +515,18 @@ class Builder:
                     context.traits
                 )
                 if error:
-                    return BuildResult(success=False, error=error)
+                    logger.error(f"Failed to compile {source}: {error}")
+                    return BuildResult(success=False, error=f"Failed to compile {source}:\n{error}")
                 objects.append(object_path)
                 
             # Link objects
             if context.package.package_type == PackageType.LIBRARY:
-                output_name = f"lib{context.package.name}.a"
+                output_name = f"lib{context.package.package_name}.a"
             else:
                 output_name = context.package.name
             output_path = Path(output_name)
             
+            logger.debug(f"Linking objects for {context.package.name}: {objects}")
             error = self._link_objects(
                 objects,
                 output_path,
@@ -382,68 +536,77 @@ class Builder:
                 context.traits
             )
             if error:
-                return BuildResult(success=False, error=error)
+                logger.error(f"Failed to link {context.package.name}: {error}")
+                return BuildResult(success=False, error=f"Failed to link {context.package.name}:\n{error}")
                 
             # Run post-build hooks
-            self.hook_manager.run_hooks(BuildStage.POST_BUILD, context)
+            try:
+                self.hook_manager.run_hooks(BuildStage.POST_BUILD, context)
+            except Exception as e:
+                logger.error(f"Post-build hook failed for {context.package.name}: {e}")
+                return BuildResult(success=False, error=f"Post-build hook failed: {str(e)}")
                 
             # Return success with artifacts (convert back to absolute paths)
+            output_path = context.package.get_output_path(parent_package)
+            logger.debug(f"Build successful for {context.package.name}, output at: {output_path}")
             return BuildResult(
                 success=True,
-                artifacts={"output": context.package.get_build_dir() / output_path}
+                artifacts={"output": output_path}
             )
         except Exception as e:
-            logger.error("Build failed: %s", e)
-            return BuildResult(
-                success=False,
-                error=f"Build failed: {str(e)}"
-            )
+            error_msg = f"Build failed for {context.package.name}: {str(e)}"
+            if hasattr(e, '__traceback__'):
+                import traceback
+                error_msg += f"\nTraceback:\n{''.join(traceback.format_tb(e.__traceback__))}"
+            logger.error(error_msg)
+            return BuildResult(success=False, error=error_msg)
 
     def build(
         self,
         package: Package,
         traits: Optional[Dict[str, str]] = None,
-        verbose: bool = False
+        verbose: bool = False,
+        parent_package: Optional[Package] = None
     ) -> BuildResult:
-        """Build a package.
+        """Build a package."""
+        logger.debug(f"Starting build of {package.name}")
+        if parent_package:
+            logger.debug(f"Building as dependency of {parent_package.name}")
         
-        Args:
-            package: Package to build
-            traits: Optional build traits
-            verbose: Whether to show verbose output
-            
-        Returns:
-            BuildResult indicating success/failure and artifacts
-        """
         try:
             # Create build metadata
             compiler_info = self._get_compiler_info()
             build_metadata = package.create_build_metadata(compiler_info)
+            logger.debug(f"Created build metadata for {package.name}")
             
             # Add traits to build metadata
             if traits:
                 build_metadata.traits.update(traits)
+                logger.debug(f"Added traits to build metadata: {traits}")
                 
-            # Create build directory
-            build_dir = package.get_build_dir()
+            # Create build directory - use parent's build/deps directory if this is a dependency
+            if parent_package:
+                build_dir = parent_package.get_build_path(package._validated_config.name)
+            else:
+                build_dir = package.get_build_dir()
+                
+            logger.debug(f"Using build directory: {build_dir}")
+                
             try:
                 build_dir.mkdir(parents=True, exist_ok=True)
             except Exception as e:
-                error_msg = f"Failed to create build directory at {build_dir}: {str(e)}"
-                if self.error_handler:
-                    context = BuildContext(package, build_metadata, traits or {}, verbose)
-                    self.error_handler(context, error_msg)
+                error_msg = f"Failed to create build directory {build_dir}: {str(e)}"
+                logger.error(error_msg)
                 return BuildResult(success=False, error=error_msg)
             
             # Change to build directory for all operations
             try:
                 old_cwd = Path.cwd()
                 os.chdir(build_dir)
+                logger.debug(f"Changed working directory to: {build_dir}")
             except Exception as e:
-                error_msg = f"Failed to change to build directory {build_dir} from {old_cwd}: {str(e)}"
-                if self.error_handler:
-                    context = BuildContext(package, build_metadata, traits or {}, verbose)
-                    self.error_handler(context, error_msg)
+                error_msg = f"Failed to change to build directory {build_dir}: {str(e)}"
+                logger.error(error_msg)
                 return BuildResult(success=False, error=error_msg)
                 
             try:
@@ -457,55 +620,55 @@ class Builder:
                 
                 try:
                     # Run pre-build hooks
+                    logger.debug("Running pre-build hooks")
                     self.hook_manager.run_hooks(BuildStage.PRE_BUILD, context)
                 except Exception as e:
-                    error_msg = str(e)
-                    if self.error_handler:
-                        self.error_handler(context, error_msg)
+                    error_msg = f"Pre-build hook failed for {package.name}: {str(e)}"
+                    logger.error(error_msg)
                     return BuildResult(success=False, error=error_msg)
                 
-                # Build dependencies first
-                for dep_name, dep_version in package.get_dependencies().items():
-                    # TODO: Resolve and load dependency package
-                    # For now, assume it's a local package in the same directory
-                    dep_dir = package.path.parent / dep_name
-                    dep_package = Package(dep_dir)
-                    result = self.build(dep_package, traits, verbose)
-                    if not result.success:
-                        error_msg = f"Failed to build dependency {dep_name}: {result.error}"
-                        if self.error_handler:
-                            self.error_handler(context, error_msg)
-                        return result
+                # Step 1: Ensure all dependencies are installed
+                logger.debug("Ensuring dependencies are installed")
+                error = self._ensure_dependencies(package, context)
+                if error:
+                    logger.error(f"Dependency installation failed for {package.name}: {error}")
+                    return BuildResult(success=False, error=error)
+                
+                # Step 2: Build all dependencies in topological order
+                logger.debug("Building dependencies")
+                error = self._build_dependencies(package, context)
+                if error:
+                    logger.error(f"Dependency build failed for {package.name}: {error}")
+                    return BuildResult(success=False, error=error)
                 
                 # Run post-dependency hooks
                 try:
+                    logger.debug("Running post-dependency hooks")
                     self.hook_manager.run_hooks(BuildStage.POST_DEPENDENCY_BUILD, context)
                 except Exception as e:
-                    error_msg = str(e)
-                    if self.error_handler:
-                        self.error_handler(context, error_msg)
+                    error_msg = f"Post-dependency hook failed for {package.name}: {str(e)}"
+                    logger.error(error_msg)
                     return BuildResult(success=False, error=error_msg)
                 
-                # Build the package
-                result = self._build_package(context)
-                if not result.success and self.error_handler:
-                    self.error_handler(context, result.error)
+                # Step 3: Build the package itself
+                logger.debug(f"Building package {package.name}")
+                result = self._build_package(context, parent_package)
+                if not result.success:
+                    logger.error(f"Package build failed for {package.name}: {result.error}")
+                    return result
+                
+                logger.debug(f"Successfully built {package.name}")
                 return result
                 
             finally:
                 # Change back to original directory
+                logger.debug(f"Changing back to original directory: {old_cwd}")
                 os.chdir(old_cwd)
                 
         except Exception as e:
-            error_msg = f"Unexpected error during build: {str(e)}"
-            if hasattr(e, '__cause__') and e.__cause__:
-                error_msg = f"{error_msg}\nCaused by: {str(e.__cause__)}"
-            if self.error_handler:
-                try:
-                    context = BuildContext(package, build_metadata, traits or {}, verbose)
-                    self.error_handler(context, error_msg)
-                except:
-                    # If we can't create the context, just pass the error without context
-                    if self.error_handler:
-                        self.error_handler(None, error_msg)
+            error_msg = f"Build failed for {package.name}: {str(e)}"
+            if hasattr(e, '__traceback__'):
+                import traceback
+                error_msg += f"\nTraceback:\n{''.join(traceback.format_tb(e.__traceback__))}"
+            logger.error(error_msg)
             return BuildResult(success=False, error=error_msg) 
