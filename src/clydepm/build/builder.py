@@ -276,6 +276,19 @@ class Builder:
                         # Path is on different drive/root, use absolute
                         cmd.extend(["-L", str(lib_path)])
             
+            # Add library paths for dependencies
+            for dep in package.get_all_dependencies():
+                if dep.package_type == PackageType.LIBRARY:
+                    # Use parent package's build path for the dependency
+                    build_dir = package.get_build_path(dep.name)
+                    if build_dir.exists():
+                        try:
+                            rel_lib = os.path.relpath(build_dir)
+                            cmd.extend(["-L", rel_lib])
+                        except ValueError:
+                            cmd.extend(["-L", str(build_dir)])
+                        cmd.append(f"-l{dep.package_name}")
+
             # Add ldflags from build metadata
             cmd.extend(build_metadata.ldflags)
             
@@ -460,7 +473,8 @@ class Builder:
             # Build each dependency in order
             for dep in build_order:
                 # Skip the root package if it's not a dependency of another package
-                if dep.name == package.name and not parent_package:
+                # Also skip if the dependency is the same as the parent package to prevent infinite recursion
+                if (dep.name == package.name and not parent_package) or (parent_package and dep.name == parent_package.name):
                     continue
                     
                 logger.info(f"Building dependency: {dep.name}")

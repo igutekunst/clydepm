@@ -47,26 +47,34 @@ class DependencyResolver:
         if "deps" not in str(dep_path):
             return
             
-        # Get the expected name from the path
-        rel_path = dep_path.relative_to(dep_path.parent.parent.parent)  # Get path relative to deps/
-        expected_name = str(rel_path)
-        
-        if package.name != expected_name:
-            error_msg = (
-                f"Package name mismatch:\n"
-                f"  Installed at: deps/{expected_name}\n"
-                f"  But package.yml has name: {package.name}\n"
-                f"This can happen if:\n"
-                f"  1. The package was installed incorrectly\n"
-                f"  2. The package.yml was modified after installation\n"
-                f"  3. The package name was changed without updating the directory structure\n"
-                f"\nTo fix this:\n"
-                f"  1. Make sure the package name in package.yml matches its installation path\n"
-                f"  2. For scoped packages, the name should include the organization (e.g. '@org/pkg')\n"
-                f"  3. The directory structure should match the package name (e.g. 'deps/org/pkg')"
-            )
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+        # Find the deps directory in the path
+        parts = dep_path.parts
+        try:
+            deps_index = parts.index("deps")
+            # Get everything after "deps/"
+            rel_parts = parts[deps_index + 1:]
+            expected_name = str(Path(*rel_parts))
+            
+            if package.name != expected_name:
+                error_msg = (
+                    f"Package name mismatch:\n"
+                    f"  Installed at: deps/{expected_name}\n"
+                    f"  But package.yml has name: {package.name}\n"
+                    f"This can happen if:\n"
+                    f"  1. The package was installed incorrectly\n"
+                    f"  2. The package.yml was modified after installation\n"
+                    f"  3. The package name was changed without updating the directory structure\n"
+                    f"\nTo fix this:\n"
+                    f"  1. Make sure the package name in package.yml matches its installation path\n"
+                    f"  2. For scoped packages, the name should include the organization (e.g. '@org/pkg')\n"
+                    f"  3. The directory structure should match the package name (e.g. 'deps/@org/pkg')"
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+        except ValueError:
+            # If "deps" is not in the path, something is wrong with the directory structure
+            logger.error(f"Invalid package path: {dep_path} (no deps/ directory found)")
+            raise ValueError(f"Invalid package path: {dep_path} (no deps/ directory found)")
         
     def add_package(self, package: Package, root_path: Optional[Path] = None) -> None:
         """Add package and all its dependencies to the graph.
@@ -134,16 +142,21 @@ class DependencyResolver:
             # Try different possible dependency paths for non-local dependencies
             dep_paths = []
             
+            # Get the root path for dependency resolution
+            root_search_path = search_path
+            while "deps" in str(root_search_path):
+                root_search_path = root_search_path.parent
+            
             if dep_name.startswith("@"):
-                # New format: @org/pkg -> deps/org/pkg (strip @ for filesystem path)
-                org = dep_name.split("/")[0][1:]  # Remove @ from org
+                # New format: @org/pkg -> deps/@org/pkg (keep @ in filesystem path)
+                org = dep_name.split("/")[0]  # Keep @ in org
                 pkg = dep_name.split("/")[1]
-                dep_path = search_path / "deps" / org / pkg
+                dep_path = root_search_path / "deps" / org / pkg
                 logger.debug(f"Checking scoped path: {dep_path}")
                 dep_paths.append(dep_path)
             else:
                 # Old format: pkg -> deps/pkg
-                dep_path = search_path / "deps" / dep_name
+                dep_path = root_search_path / "deps" / dep_name
                 logger.debug(f"Checking legacy path: {dep_path}")
                 dep_paths.append(dep_path)
                 
