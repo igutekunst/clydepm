@@ -156,6 +156,30 @@ class Builder:
                 # Path is on different drive/root, use absolute
                 cmd.extend(["-I", str(include_path)])
         
+        # Add include paths for dependencies
+        for dep in package.get_all_dependencies():
+            # Add the dependency's include directory
+            include_dir = dep.path / "include"
+            if include_dir.exists():
+                try:
+                    rel_include = os.path.relpath(include_dir)
+                    logger.debug(f"Adding dependency include path: {rel_include}")
+                    cmd.extend(["-I", rel_include])
+                except ValueError:
+                    logger.debug(f"Adding absolute dependency include path: {include_dir}")
+                    cmd.extend(["-I", str(include_dir)])
+            
+            # Also add the dependency's src directory for header files
+            src_dir = dep.path / "src"
+            if src_dir.exists():
+                try:
+                    rel_include = os.path.relpath(src_dir)
+                    logger.debug(f"Adding dependency src path: {rel_include}")
+                    cmd.extend(["-I", rel_include])
+                except ValueError:
+                    logger.debug(f"Adding absolute dependency src path: {src_dir}")
+                    cmd.extend(["-I", str(src_dir)])
+        
         # Update context with command
         context.command = cmd
         
