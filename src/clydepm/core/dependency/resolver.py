@@ -63,7 +63,7 @@ class DependencyResolver:
                 f"\nTo fix this:\n"
                 f"  1. Make sure the package name in package.yml matches its installation path\n"
                 f"  2. For scoped packages, the name should include the organization (e.g. '@org/pkg')\n"
-                f"  3. The directory structure should match the package name (e.g. 'deps/@org/pkg')"
+                f"  3. The directory structure should match the package name (e.g. 'deps/org/pkg')"
             )
             logger.error(error_msg)
             raise ValueError(error_msg)
@@ -99,12 +99,44 @@ class DependencyResolver:
         for dep_name, dep_spec in deps.items():
             logger.debug(f"Processing dependency {dep_name} with spec {dep_spec}")
             
-            # Try different possible dependency paths
+            # Handle local dependencies
+            if isinstance(dep_spec, str) and dep_spec.startswith("local:"):
+                local_path = dep_spec[6:]  # Remove "local:" prefix
+                dep_path = (search_path / local_path).resolve()
+                logger.debug(f"Checking local dependency path: {dep_path}")
+                
+                if dep_path.exists() and (dep_path / "package.yml").exists():
+                    try:
+                        dep_pkg = Package(dep_path)
+                        # For local dependencies, we use the name from the requires section
+                        # since the actual package name might be different
+                        logger.debug(f"Successfully loaded local package {dep_name}")
+                        
+                        # Add to graph if not already present
+                        if dep_name not in self.nodes:
+                            logger.debug(f"Adding local dependency {dep_name} to graph")
+                            # Store the package under the name used in requires
+                            self.nodes[dep_name] = DependencyNode(package=dep_pkg)
+                            # Process its dependencies
+                            self.add_package(dep_pkg, root_path=search_path)
+                        
+                        # Add relationship if not already present
+                        self.nodes[name].dependencies.add(dep_name)
+                        self.nodes[dep_name].dependents.add(name)
+                        logger.debug(f"Added local dependency relationship: {name} -> {dep_name}")
+                        continue
+                    except Exception as e:
+                        logger.debug(f"Failed to load local package: {e}")
+                        raise ValueError(f"Failed to load local dependency {dep_name} at {dep_path}: {e}")
+                else:
+                    raise ValueError(f"Local dependency {dep_name} not found at {dep_path}")
+            
+            # Try different possible dependency paths for non-local dependencies
             dep_paths = []
             
             if dep_name.startswith("@"):
-                # New format: @org/pkg -> deps/@org/pkg
-                org = dep_name.split("/")[0]  # Keep the @ in org
+                # New format: @org/pkg -> deps/org/pkg (strip @ for filesystem path)
+                org = dep_name.split("/")[0][1:]  # Remove @ from org
                 pkg = dep_name.split("/")[1]
                 dep_path = search_path / "deps" / org / pkg
                 logger.debug(f"Checking scoped path: {dep_path}")

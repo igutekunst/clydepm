@@ -24,7 +24,7 @@ requires:
     "@org2/lib2": "^2.0.0"
 """)
 
-    # Create lib1 package
+    # Create lib1 package - note directory is without @ but package.yml includes it
     lib1 = root / "deps" / "org1" / "lib1"
     lib1.mkdir(parents=True)
     with open(lib1 / "package.yml", "w") as f:
@@ -39,7 +39,7 @@ requires:
     "@org2/lib2": "^2.0.0"
 """)
 
-    # Create lib2 package
+    # Create lib2 package - note directory is without @ but package.yml includes it
     lib2 = root / "deps" / "org2" / "lib2"
     lib2.mkdir(parents=True)
     with open(lib2 / "package.yml", "w") as f:
@@ -219,7 +219,7 @@ def test_missing_scoped_dependency(temp_missing_package_tree):
     
     error_msg = str(exc_info.value)
     assert "@igutekunst/ooc" in error_msg
-    assert "deps/igutekunst/ooc" in error_msg  # Should show the attempted path
+    assert "deps/igutekunst/ooc" in error_msg  # Should show the attempted path without @ prefix
 
 def test_dependency_node_access(temp_package_tree):
     """Test that node access in the dependency graph is correct."""

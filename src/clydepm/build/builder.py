@@ -47,6 +47,7 @@ class Builder:
         self.cache = BuildCache(cache_dir)
         self.hook_manager = BuildHookManager()
         self.error_handler = None
+        self._built_packages = set()  # Track packages that have been built
         
         # Initialize and register build data collector
         build_data_dir = cache_dir / "build_data" if cache_dir else Path.home() / ".clydepm" / "build_data"
@@ -430,7 +431,8 @@ class Builder:
     def _build_dependencies(
         self,
         package: Package,
-        context: BuildContext
+        context: BuildContext,
+        parent_package: Optional[Package] = None
     ) -> Optional[str]:
         """Build all dependencies in the correct order.
         
@@ -456,7 +458,11 @@ class Builder:
                 return str(e)  # This will include cycle detection errors
                 
             # Build each dependency in order
-            for dep in build_order[:-1]:  # Skip the last one (it's the root package)
+            for dep in build_order:
+                # Skip the root package if it's not a dependency of another package
+                if dep.name == package.name and not parent_package:
+                    continue
+                    
                 logger.info(f"Building dependency: {dep.name}")
                 
                 # Create build context for dependency
@@ -573,6 +579,12 @@ class Builder:
         if parent_package:
             logger.debug(f"Building as dependency of {parent_package.name}")
         
+        # Check if package has already been built
+        package_key = (package.name, package.path)
+        if package_key in self._built_packages:
+            logger.debug(f"Package {package.name} has already been built, skipping")
+            return BuildResult(success=True)
+        
         try:
             # Create build metadata
             compiler_info = self._get_compiler_info()
@@ -636,7 +648,7 @@ class Builder:
                 
                 # Step 2: Build all dependencies in topological order
                 logger.debug("Building dependencies")
-                error = self._build_dependencies(package, context)
+                error = self._build_dependencies(package, context, parent_package)
                 if error:
                     logger.error(f"Dependency build failed for {package.name}: {error}")
                     return BuildResult(success=False, error=error)
@@ -656,6 +668,9 @@ class Builder:
                 if not result.success:
                     logger.error(f"Package build failed for {package.name}: {result.error}")
                     return result
+                
+                # Mark package as built
+                self._built_packages.add(package_key)
                 
                 logger.debug(f"Successfully built {package.name}")
                 return result

@@ -7,4 +7,4 @@ sources:
   - src/main.cpp
 
 requires:
-  formatter: "local:../formatter"
+  formatter-lib: "local:../formatter"
